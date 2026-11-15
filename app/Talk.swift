@@ -370,6 +370,17 @@ final class Talk: ObservableObject {
     }
 
     /// SEND NOW: the take (Space) or the sentence being heard (the detector) is written down and sent at once
+    /// v15: Esc while a Space take is recording: stop, throw the take away, nothing is transcribed or sent
+    func cancelTake() {
+        guard manual else { return }
+        manual = false
+        work.async { self.manualOn = false; self.manualBuf = []; self.vad.reset() }
+        note = "cancelled"
+        state = on ? .listening : .typing
+        saveState()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { if self.note == "cancelled" { self.note = "" } }
+    }
+
     func sendNow() {
         if manual {
             manual = false; state = .sending; saveState()

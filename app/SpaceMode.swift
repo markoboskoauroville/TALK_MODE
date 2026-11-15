@@ -9,9 +9,9 @@
 //   keys "pass" (the keyboard is ours), plain_bar (our sentence on its bar), blob false, esc_hold 2, beat 5. Its TAKE OVER
 //   ends Space Mode. It is also the watchdog: no POST /beat for 5 s (Talk Mode hangs) or Talk Mode gone = lifted.
 // - the keyboard is this file's tap at the HID level (before every session tap): every key is swallowed; Space (no ⌘ ⌃ ⌥)
-//   starts a take, the second Space sends it; Escape held 2 s ends Space Mode. The tap runs on the main run loop, so a
+//   starts a take, the second Space sends it; Esc Esc (twice within 1 s) ends Space Mode, one Esc while dictating cancels the take. The tap runs on the main run loop, so a
 //   hang makes macOS switch it off by itself (tapDisabledByTimeout): the keyboard is never held by a frozen app.
-// Ways out, never a lockout: TAKE OVER on the banner, Escape held 2 s, the voice ("space mode off", "go out of this mode",
+// Ways out, never a lockout: TAKE OVER on the banner, Esc Esc, the voice ("space mode off", "go out of this mode",
 // "I want my keyboard back", "isključi space mode"), the switch, talkmode://space-off, the watchdog, quitting the app.
 import AppKit
 import ApplicationServices
@@ -19,7 +19,7 @@ import ApplicationServices
 final class SpaceMode: ObservableObject {
     static let shared = SpaceMode()
     static let owner = "talkmode-space"
-    static let banner = "SPACE MODE — keyboard and mouse are off · SPACE talks · say “space mode off” or press TAKE OVER"
+    static let banner = "SPACE MODE — keyboard and mouse are off · SPACE talks · Esc Esc = exit (Esc once cancels a take) · or press TAKE OVER"
     static let macroAPI = "http://127.0.0.1:8829"
     static let MACRO_MARK: Int64 = 0x4D41_4352_4F4B        // Macro Recorder's own events pass every lock
 
@@ -32,7 +32,8 @@ final class SpaceMode: ObservableObject {
     private var tapSource: CFRunLoopSource?
     private var ticker: Timer?
     private var autoOff: Timer?
-    private var escSince: Date?
+    private var escSince: Date?            // (unused since v15)
+    private var lastEsc: Date?              // v15: the first Esc of an Esc Esc
     private var ticks = 0
     private var beatMisses = 0
     private var beating = false
@@ -88,7 +89,7 @@ final class SpaceMode: ObservableObject {
             else if (st?["lock"] as? String ?? "off") != "off" { why = "the input lock is busy (\(st?["lock"] as? String ?? "")): try again in a moment" }
             else {
                 let r = SpaceMode.macro("/lock", ["owner": SpaceMode.owner, "text": SpaceMode.banner, "seconds": 0, "pid": Int(getpid()),
-                                                  "restore": false, "keys": "pass", "plain_bar": true, "blob": false, "esc_hold": 2, "beat": 5])
+                                                  "restore": false, "keys": "pass", "plain_bar": true, "blob": false, "esc_hold": 5, "beat": 5])
                 ok = r?["ok"] as? Bool == true
                 if !ok { why = "the input lock did not come on: " + (r?["error"] as? String ?? "no answer") }
             }
@@ -99,7 +100,7 @@ final class SpaceMode: ObservableObject {
                     _ = SpaceMode.macro("/unlock", ["owner": SpaceMode.owner])
                     self.note = "the keyboard tap did not start (Accessibility for Talk Mode)"; return
                 }
-                self.on = true; self.note = ""; self.escSince = nil; self.beatMisses = 0; self.ticks = 0
+                self.on = true; self.note = ""; self.escSince = nil; self.lastEsc = nil; self.beatMisses = 0; self.ticks = 0
                 self.ticker?.invalidate()
                 let t = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in self?.tick() }
                 RunLoop.main.add(t, forMode: .common); self.ticker = t
@@ -140,7 +141,6 @@ final class SpaceMode: ObservableObject {
     private func tick() {
         guard on else { return }
         if let t = tap, !CGEvent.tapIsEnabled(tap: t) { CGEvent.tapEnable(tap: t, enable: true) }
-        if let s = escSince, Date().timeIntervalSince(s) >= 2 { escSince = nil; disable("escape"); return }
         ticks += 1
         guard ticks % 4 == 0, !beating else { return }
         beating = true
@@ -198,9 +198,16 @@ final class SpaceMode: ObservableObject {
         if e.getIntegerValueField(.eventSourceUserData) == SpaceMode.MACRO_MARK { return pass }
         let code = e.getIntegerValueField(.keyboardEventKeycode)
         let repeatKey = e.getIntegerValueField(.keyboardEventAutorepeat) != 0
-        if code == 53 {                                                    // Escape: held 2 s = out
-            if type == .keyDown, !repeatKey, escSince == nil { escSince = Date() }
-            if type == .keyUp { escSince = nil }
+        if code == 53 {                                                    // v15: Esc cancels a take; Esc Esc (within 1 s) = out
+            if type == .keyDown, !repeatKey {
+                if Talk.shared.manual {                                    // dictating: one Esc cancels the take and does NOT count toward Esc Esc
+                    lastEsc = nil
+                    DispatchQueue.main.async { Talk.shared.cancelTake() }
+                } else if let l = lastEsc, Date().timeIntervalSince(l) <= 1.0 {
+                    lastEsc = nil
+                    DispatchQueue.main.async { self.disable("escape") }
+                } else { lastEsc = Date() }
+            }
             return nil
         }
         if code == 49, type == .keyDown, !repeatKey,
