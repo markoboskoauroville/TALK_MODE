@@ -43,6 +43,7 @@ enum RedEdge {
         for s in NSScreen.screens {
             let w = NSWindow(contentRect: s.frame, styleMask: .borderless, backing: .buffered, defer: false)
             w.isOpaque = false; w.backgroundColor = .clear; w.hasShadow = false
+            w.titleVisibility = .hidden   // borderless overlay: no title at all
             w.ignoresMouseEvents = true
             w.level = .screenSaver
             w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
