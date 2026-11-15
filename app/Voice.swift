@@ -151,7 +151,34 @@ enum Phrase {
                                       "like and subscribe", "transcribed by", "captions by"]
     static let moreHallucinations: Set<String> = ["bye", "bye bye", "goodbye", "thank you", "oh", "ah", "the end", "you you", "silence", "no speech", "mm", "mhm"]
 
+    /// v14: a transcript that only DESCRIBES a sound: wrapped in * ** [ ] ( ) ♪, or one interjection / onomatopoeia / repeated syllable
+    static let soundWords: Set<String> = ["sigh", "sighs", "sighing", "cough", "coughs", "coughing", "whistle", "whistles", "whistling", "laugh", "laughs",
+        "laughing", "laughter", "music", "applause", "clapping", "hmm", "hm", "mm", "mmm", "uh", "um", "huh", "kuf", "breathing", "sniff", "sniffs",
+        "humming", "hums", "singing", "silence", "noise", "static", "inaudible", "unintelligible", "gasp", "gasps", "yawn", "yawns", "groan", "groans",
+        "sneeze", "cough cough", "snoring", "clears throat", "clearing throat", "beep", "click", "clicks"]
+    static func isSoundTag(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return true }
+        let pairs: [(Character, Character)] = [("*", "*"), ("[", "]"), ("(", ")"), ("♪", "♪"), ("♫", "♫"), ("_", "_"), ("<", ">"), ("{", "}")]
+        if let f = t.first, let l = t.last, pairs.contains(where: { $0.0 == f && $0.1 == l }) { return true }
+        if t.hasPrefix("♪") || t.hasPrefix("♫") || t.hasSuffix("♪") || t.hasSuffix("♫") { return true }
+        let n = norm(t)
+        if n.isEmpty { return true }
+        let ws = n.split(separator: " ").map(String.init)
+        if soundWords.contains(n) { return true }
+        if ws.allSatisfy({ soundWords.contains($0) }) && ws.count <= 4 { return true }
+        // elongated interjections: oooohhhhhh, ahhh, mmmm, hmmmm, ohh
+        let squeezed = String(n.filter { $0 != " " }.reduce(into: [Character]()) { if $0.last != $1 { $0.append($1) } })
+        if ["o", "oh", "ho", "oho", "ah", "aha", "h", "hm", "m", "mh", "eh", "uh", "ha", "hah", "ooh", "ahh", "mm", "hmm", "ohh", "oh h", "hoh", "uhm"].contains(squeezed) { return true }
+        // one syllable repeated: "kuf kuf kuf", "la la la", "na na", "ba ba ba"
+        if ws.count >= 2, Set(ws).count == 1, ws[0].count <= 4 { return true }
+        // a single stretched word made of one or two letters repeated ("fffff", "shhhh")
+        if ws.count == 1, ws[0].count >= 4, Set(ws[0]).count <= 2, ws[0].count >= 3 { return true }
+        return false
+    }
+
     static func isNoise(_ text: String) -> Bool {
+        if isSoundTag(text) { return true }
         let n = norm(text)
         if n.count < 2 || !n.contains(where: { $0.isLetter }) { return true }
         if hallucinations.contains(n) || moreHallucinations.contains(n) { return true }

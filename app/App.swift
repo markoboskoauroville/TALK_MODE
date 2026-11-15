@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 13
+let VERSION = 14
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {

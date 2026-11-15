@@ -1,5 +1,7 @@
 # Talk Mode (Mantra): TAKEOVER
 
+**v14 sound tags:** Phrase.isSoundTag drops a transcript that only describes a sound: wrapped in * ** [ ] ( ) ♪ ♫ _ < > { }, or sigh/cough/whistle(s)/whistling/laugh/music/applause/hmm/kuf/humming..., stretched interjections (oooohhhhhh), a repeated syllable ("kuf kuf kuf"). Same "ignored (noise)" + ignored.log.
+
 **v13 noise guard (hallucinations on silence):** Audio.swift VAD: threshold floor+15 dB (min -48), an utterance needs >=0.6 s of really voiced frames averaging >=18 dB above the floor; Voice.swift: Phrase.isNoise also drops "thank you", "bye", "I'm going to go ...", subtitle credits, no-letter text, and Voice to Text's no_speech_prob > 0.6 / confidence < 0.35 when passed on; Talk.swift: a sentence ~same (word overlap >= 0.8) as one of the last 2 minutes is dropped (not for SEND NOW/Space). Dropped = note "ignored (noise)" for 4 s + ~/Library/Application Support/Talk Mode (Mantra)/ignored.log, never sent.
 
 **v13, 15.11.2026: a normal window (see WINDOW below), HEARD does not linger (Marko: "annoying text ... heard mother what's happening again").** HEARD shows the words while they are sent and 6 s after, fades out over 0.6 s, then `heard` is empty (also in state.json). Talk.swift `heardChanged`.
