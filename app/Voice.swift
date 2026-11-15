@@ -149,3 +149,70 @@ enum Phrase {
         return n.count < 2 || hallucinations.contains(n)
     }
 }
+
+/// The ears are Marko's own: Voice to Text (Mantra)'s engine for the language, through its route (Frankfurt, key ring),
+/// asked on its local API (127.0.0.1:8865, POST /hear, v23+). Marko, 15.11.2026: "It needs to use my engine basically,
+/// voice to text, the same one I'm using for transcription". When the app does not answer: its own binary (`--hear`, the
+/// engine read from its settings); only when Voice to Text is not on this Mac at all: MANTRA_VOICE /hear, and the HEARD
+/// line says so.
+enum Hearing {
+    static let api = "http://127.0.0.1:8865"
+    static let vttBinary = "/Applications/Voice to Text (Mantra).app/Contents/MacOS/Voice to Text (Mantra)"
+
+    /// (text, error, how: "Deepgram EN · Frankfurt · 1.1 s")
+    static func hear(_ samples: [Float], lang: String) -> (text: String?, error: String?, via: String) {
+        let wav = WAV.data(samples)
+        if let r = viaAPI(wav, lang: lang) { return r }
+        if let r = viaBinary(wav, lang: lang) { return r }
+        let v = Voice.hear(samples, lang: lang)
+        return (v.text, v.error, "MANTRA_VOICE Whisper (Voice to Text did not answer)")
+    }
+
+    static func viaAPI(_ wav: Data, lang: String) -> (String?, String?, String)? {
+        guard let url = URL(string: api + "/hear?lang=\(lang)") else { return nil }
+        var r = URLRequest(url: url, timeoutInterval: 90)
+        r.httpMethod = "POST"; r.httpBody = wav; r.setValue("audio/wav", forHTTPHeaderField: "Content-Type")
+        let sem = DispatchSemaphore(value: 0)
+        var j: [String: Any]?, code = 0
+        URLSession.shared.dataTask(with: r) { d, resp, _ in
+            code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if let d { j = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] }
+            sem.signal()
+        }.resume()
+        _ = sem.wait(timeout: .now() + 95)
+        guard code == 200, let j, j["text"] != nil else { return nil }      // 404: Voice to Text before v23
+        let via = label(j["engine"] as? String, j["route"] as? String, j["secs"] as? Double)
+        if (j["ok"] as? Bool) == true { return ((j["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines), nil, via) }
+        let err = j["error"] as? String ?? "no text"
+        if err.hasPrefix("nothing said") { return ("", nil, via) }
+        return (nil, err, via)
+    }
+
+    static func viaBinary(_ wav: Data, lang: String) -> (String?, String?, String)? {
+        guard FileManager.default.isExecutableFile(atPath: vttBinary) else { return nil }
+        let prefs = UserDefaults(suiteName: "com.mantra.voicetotext")
+        let engine = prefs?.string(forKey: "engine_" + lang) ?? "assemblyai"
+        let f = FileManager.default.temporaryDirectory.appendingPathComponent("talkmode-\(UUID().uuidString).wav")
+        guard (try? wav.write(to: f)) != nil else { return nil }
+        defer { try? FileManager.default.removeItem(at: f) }
+        let (st, out) = Shell.run(vttBinary, ["--hear", engine, f.path, lang], timeout: 90)
+        guard st == 0 else { return nil }
+        var text: String?, err: String?, route = "", head = engine
+        for line in out.split(separator: "\n").map(String.init) {
+            if line.hasPrefix("FAILED:") { err = String(line.dropFirst(7)).trimmingCharacters(in: .whitespaces) }
+            else if line.hasPrefix("route:") { route = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces) }
+            else if text == nil, let r = line.range(of: ": "), line.first?.isNumber == true {
+                head = String(line[..<r.lowerBound]).split(separator: " ").dropFirst(2).joined(separator: " ")
+                text = String(line[r.upperBound...])
+            }
+        }
+        if text == nil && err == nil { return nil }
+        let via = label(head, route == "-" ? "" : route, nil) + " (Voice to Text not running)"
+        if let e = err, e.hasPrefix("nothing said") { return ("", nil, via) }
+        return (text, err, via)
+    }
+
+    static func label(_ engine: String?, _ route: String?, _ secs: Double?) -> String {
+        [engine ?? "", route ?? "", secs.map { String(format: "%.1f s", $0) } ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}

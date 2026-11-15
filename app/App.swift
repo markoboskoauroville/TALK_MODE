@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 3
+let VERSION = 4
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -188,6 +188,13 @@ struct Root: View {
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("heard")
+                        if !talk.heardVia.isEmpty {
+                            Text("WRITTEN DOWN BY  " + talk.heardVia)
+                                .font(.system(size: max(13, big * 0.12), weight: .semibold, design: .monospaced))
+                                .foregroundStyle(Ink.dim).multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("heard-via")
+                        }
                     }
                     Spacer(minLength: 0)
                 }
@@ -209,10 +216,23 @@ struct Root: View {
                     StepNumber(n: 1)
                     Cell(label: "TALK TO") {
                         Menu {
-                            ForEach(talk.sessions) { s in Button(s.name) { talk.choose(s) } }
+                            // a folder per device, newest activity first; inside, the sessions newest first
+                            ForEach(talk.folders) { f in
+                                Menu(f.name + "  ·  " + (f.online ? "\(f.sessions.count) " + (f.sessions.count == 1 ? "session" : "sessions") : "offline")) {
+                                    if !f.note.isEmpty { Text(f.note) }
+                                    ForEach(f.sessions) { s in
+                                        Button((s.id == talk.target?.id ? "✓ " : "") + s.name + "  ·  " + Roster.ago(s.active)
+                                               + (s.deliverable ? (s.detail.isEmpty ? "" : "  ·  " + s.detail) : "  ·  " + s.reason)) { talk.choose(s) }
+                                            .disabled(!s.deliverable)
+                                    }
+                                }
+                            }
                             Divider()
-                            Button("Look for sessions again") { talk.refreshSessions() }
-                        } label: { Text(talk.target?.name ?? "CHOOSE THE SESSION").foregroundStyle(talk.target == nil ? Ink.amber : Ink.text) }
+                            Button(talk.scanning ? "Looking for sessions…" : "Look for sessions again") { talk.refreshSessions() }
+                        } label: {
+                            Text(talk.target.map { $0.device + "  ›  " + $0.name } ?? "CHOOSE THE SESSION")
+                                .foregroundStyle(talk.target == nil ? Ink.amber : Ink.text)
+                        }
                         .menuStyle(.borderlessButton).fixedSize()
                         .accessibilityLabel("Talk to session")
                     }
@@ -438,9 +458,15 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         let again = NSMenuItem(title: "Say the Last Answer Again", action: #selector(menuRepeat), keyEquivalent: ""); again.target = self; m.addItem(again)
         m.addItem(.separator())
         let ses = NSMenuItem(title: "Talk To", action: nil, keyEquivalent: ""), sm = NSMenu()
-        for s in t.sessions {
-            let i = NSMenuItem(title: s.name, action: #selector(menuSession(_:)), keyEquivalent: "")
-            i.target = self; i.representedObject = s.id; i.state = s.id == t.target?.id ? .on : .off; sm.addItem(i)
+        for f in t.folders {
+            let fi = NSMenuItem(title: f.name + "  ·  " + (f.online ? "\(f.sessions.count)" : "offline"), action: nil, keyEquivalent: ""), fm = NSMenu()
+            if !f.note.isEmpty { fm.addItem(withTitle: f.note, action: nil, keyEquivalent: "") }
+            for s in f.sessions {
+                let i = NSMenuItem(title: s.name + "  ·  " + Roster.ago(s.active) + (s.deliverable ? "" : "  ·  " + s.reason),
+                                   action: s.deliverable ? #selector(menuSession(_:)) : nil, keyEquivalent: "")
+                i.target = self; i.representedObject = s.id; i.state = s.id == t.target?.id ? .on : .off; fm.addItem(i)
+            }
+            fi.submenu = fm; sm.addItem(fi)
         }
         ses.submenu = sm; m.addItem(ses)
         let mic = NSMenuItem(title: "Microphone", action: nil, keyEquivalent: ""), mm = NSMenu()
@@ -465,7 +491,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     @objc func menuRepeat() { Talk.shared.repeatLast() }
     @objc func menuShow() { showWindow() }
     @objc func menuSession(_ i: NSMenuItem) {
-        if let id = i.representedObject as? String, let s = Talk.shared.sessions.first(where: { $0.id == id }) { Talk.shared.choose(s) }
+        if let id = i.representedObject as? String, let s = Talk.shared.folders.flatMap(\.sessions).first(where: { $0.id == id }) { Talk.shared.choose(s) }
     }
     @objc func menuMic(_ i: NSMenuItem) {
         if let uid = i.representedObject as? String, let d = Talk.shared.devices.first(where: { $0.uid == uid }) { Talk.shared.choose(d) }
@@ -496,6 +522,16 @@ enum Bench {
         if let d = try? JSONSerialization.data(withJSONObject: j), let s = String(data: d, encoding: .utf8) { print(s); fflush(stdout) }
     }
 
+    /// --to <id from --list-sessions> (any device), or --to-tty /dev/ttysNNN (any iTerm2 tab, e.g. a throwaway `cat`)
+    static func target(_ a: [String]) -> Target? {
+        func val(_ k: String) -> String? { a.firstIndex(of: k).flatMap { $0 + 1 < a.count ? a[$0 + 1] : nil } }
+        if let tty = val("--to-tty"), let tab = ITerm.list().first(where: { $0.tty == tty }) {
+            return Target(kind: .mac, device: "MacBook Pro", key: tab.id, name: tab.name, detail: tty, active: tab.active, deliverable: true, reason: "")
+        }
+        if let id = val("--to") ?? val("--deliver") { return Roster.scan().flatMap(\.sessions).first { $0.id == id } }
+        return nil
+    }
+
     static func run(_ a: [String]) -> Int32 {
         func val(_ k: String) -> String? { a.firstIndex(of: k).flatMap { $0 + 1 < a.count ? a[$0 + 1] : nil } }
         guard let path = val("--test-wav") else { return 2 }
@@ -505,10 +541,8 @@ enum Bench {
         do { samples = try WAV.load(path) } catch { out(["event": "error", "error": "\(error)"]); return 1 }
         let secs = Double(samples.count) / Ears.rate
         samples += [Float](repeating: 0, count: Int(Ears.rate * 3))          // the pause after the last word
-        let sessions = ITerm.list()
-        let target = val("--to-tty").flatMap { t in sessions.first { $0.tty == t } }
-        out(["event": "loaded", "file": path, "secs": secs, "sessions": sessions.count, "target": target?.name ?? "none",
-             "target_tty": target?.tty ?? ""])
+        let target = Bench.target(a)
+        out(["event": "loaded", "file": path, "secs": secs, "target": target?.name ?? "none", "target_id": target?.id ?? ""])
         let vad = VAD()
         vad.pause = val("--pause").flatMap(Double.init) ?? 1.3
         var done: [([Float], Double)] = []
@@ -534,15 +568,17 @@ enum Bench {
             i += chunk; t += 0.1
             while !done.isEmpty {
                 let (s, _) = done.removeFirst()
-                let r = Voice.hear(s, lang: lang)
-                guard let text = r.text else { out(["event": "hear-error", "error": r.error ?? ""]); continue }
+                var r: (String?, String?, String)
+                if a.contains("--mantra-voice") { let v = Voice.hear(s, lang: lang); r = (v.text, v.error, "MANTRA_VOICE") }
+                else { let h = Hearing.hear(s, lang: lang); r = (h.text, h.error, h.via) }
+                guard let text = r.0 else { out(["event": "hear-error", "error": r.1 ?? "", "via": r.2]); continue }
                 heardN += 1
                 let p = Phrase.classify(text)
-                out(["event": "heard", "text": text, "phrase": "\(p)", "noise": Phrase.isNoise(text)])
+                out(["event": "heard", "text": text, "via": r.2, "phrase": "\(p)", "noise": Phrase.isNoise(text)])
                 if p == .none, !Phrase.isNoise(text), let tg = target {
-                    let ok = ITerm.write(text, to: tg.id)
+                    let (ok, why) = Deliver.send(text, to: tg)
                     if ok { sent += 1 }
-                    out(["event": "sent", "ok": ok, "to": tg.name, "tty": tg.tty])
+                    out(["event": "sent", "ok": ok, "to": tg.name, "device": tg.device, "why": why])
                 }
             }
             if realtime { let left = 0.1 - Date().timeIntervalSince(t0); if left > 0 { Thread.sleep(forTimeInterval: left) } }
@@ -558,9 +594,20 @@ enum Main {
         let args = CommandLine.arguments
         if args.contains("--test-wav") { exit(Bench.run(args)) }
         if args.contains("--list-sessions") {
-            for s in ITerm.list().sorted(by: { $0.active > $1.active }) { print("\(s.tty)\t\(s.name)\t\(s.id)") }
-            if let d = ITerm.pickDefault(ITerm.list()) { print("default: \(d.name)") }
+            let all = Roster.scan()
+            for f in all {
+                print("\(f.name)  [\(f.online ? "online" : "offline")]\(f.note.isEmpty ? "" : "  " + f.note)")
+                for s in f.sessions {
+                    print("    \(s.deliverable ? " " : "x") \(s.name)  ·  \(Roster.ago(s.active))  ·  \(s.detail)  ·  id \(s.id)\(s.deliverable ? "" : "  ·  " + s.reason)")
+                }
+            }
+            if let d = Roster.pickDefault(all) { print("default: \(d.device) › \(d.name)") }
             exit(0)
+        }
+        if let i = args.firstIndex(of: "--deliver"), i + 1 < args.count {     // --deliver <target id|--to-tty> "text"
+            guard let t = Bench.target(args) else { print("no such target"); exit(1) }
+            let (ok, why) = Deliver.send(args.last ?? "", to: t)
+            print(ok ? "delivered to \(t.device) › \(t.name)" : "NOT delivered: \(why)"); exit(ok ? 0 : 1)
         }
         if args.contains("--list-mics") {
             let pick = Devices.pick(savedUID: UserDefaults.standard.string(forKey: "micUID"))

@@ -31,8 +31,10 @@ final class Talk: ObservableObject {
     @Published private(set) var heard = ""
     @Published private(set) var note = ""
     @Published private(set) var levelDB: Float = -90
-    @Published private(set) var sessions: [TermSession] = []
-    @Published private(set) var target: TermSession?
+    @Published private(set) var folders: [DeviceFolder] = []
+    @Published private(set) var target: Target?
+    @Published private(set) var heardVia = ""
+    @Published private(set) var scanning = false
     @Published private(set) var devices: [InputDevice] = []
     @Published private(set) var device: InputDevice?
     @Published var lang: String { didSet { UserDefaults.standard.set(lang, forKey: "lang"); saveState() } }
@@ -68,7 +70,7 @@ final class Talk: ObservableObject {
         startEars()
         refreshSessions()
         tick = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in self?.update() }
-        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.refreshSessions() }
+        Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in self?.refreshSessions() }
         saveState()
     }
 
@@ -101,8 +103,8 @@ final class Talk: ObservableObject {
         DispatchQueue.main.async { if self.on { self.state = .writing } }
         let language = DispatchQueue.main.sync { self.lang }
         hearQ.async {
-            let r = Voice.hear(s, lang: talking ? language : "en")
-            DispatchQueue.main.async { self.handle(r.text, error: r.error) }
+            let r = Hearing.hear(s, lang: talking ? language : "en")
+            DispatchQueue.main.async { self.heardVia = r.via; self.handle(r.text, error: r.error) }
         }
     }
 
@@ -143,10 +145,10 @@ final class Talk: ObservableObject {
         thinkingSince = Date()
         DispatchQueue.global().async {
             Voice.seen()                                   // REPLAY starts from the answer to these words
-            let ok = ITerm.write(text, to: t.id)
+            let (ok, why) = Deliver.send(text, to: t)
             DispatchQueue.main.async {
                 if !ok {
-                    self.note = "\(t.name) was not found: choose the session again"
+                    self.note = why + ": choose the session again"
                     self.state = .noTarget
                     self.refreshSessions()
                 } else { self.note = "" }
@@ -193,8 +195,11 @@ final class Talk: ObservableObject {
         state = all[what] ?? .listening
         heard = ["thinking", "speaking", "writing"].contains(what)
             ? "Please check the render of the second version and tell me when the upload to Drive is finished." : ""
-        sessions = [TermSession(id: "preview", name: "mac23_15-11_(real talk mode)", tty: "/dev/ttys000", active: Date())]
-        target = sessions.first
+        let mac = [Target(kind: .mac, device: "MacBook Pro", key: "p1", name: "mac23_15-11_(real talk mode)", detail: "claude-code · busy",
+                          active: Date(), deliverable: true, reason: "")]
+        folders = [DeviceFolder(name: "MacBook Pro", online: true, note: "", sessions: mac)]
+        target = mac.first
+        heardVia = "Deepgram EN · Frankfurt · 1.1 s"
         devices = [InputDevice(id: 0, uid: "preview", name: "External Microphone")]
         device = devices.first
         levelDB = -30
@@ -203,26 +208,32 @@ final class Talk: ObservableObject {
 
     // ------------------------------------------------------------ sessions and microphones
     func refreshSessions() {
+        guard !scanning else { return }
+        scanning = true
         DispatchQueue.global().async {
-            let all = ITerm.list()
+            let all = Roster.scan()
             DispatchQueue.main.async {
-                self.sessions = all.sorted { $0.name.lowercased() < $1.name.lowercased() }
+                self.scanning = false
+                self.folders = all
+                let flat = all.flatMap(\.sessions)
                 let d = UserDefaults.standard
-                if let cur = self.target, let same = all.first(where: { $0.id == cur.id }) { self.target = same; return }
-                if let id = d.string(forKey: "targetID"), let s = all.first(where: { $0.id == id }) { self.target = s }
-                else if let n = d.string(forKey: "targetName"), let s = all.first(where: { $0.name == n }) { self.target = s }
-                else { self.target = ITerm.pickDefault(all) }
+                if let cur = self.target, let same = flat.first(where: { $0.id == cur.id }) { self.target = same }
+                else if let id = d.string(forKey: "targetID"), let s = flat.first(where: { $0.id == id }) { self.target = s }
+                else if let n = d.string(forKey: "targetName"), let s = flat.first(where: { $0.name == n && $0.deliverable }) { self.target = s }
+                else if self.target == nil || self.target?.kind == .mac { self.target = Roster.pickDefault(all) }
                 if self.on, self.state == .noTarget, self.target != nil { self.state = .listening }
                 self.saveState()
             }
         }
     }
 
-    func choose(_ s: TermSession) {
+    func choose(_ s: Target) {
+        guard s.deliverable else { note = "\(s.device): \(s.reason)"; return }
         target = s
         UserDefaults.standard.set(s.id, forKey: "targetID")
         UserDefaults.standard.set(s.name, forKey: "targetName")
         if on, state == .noTarget { state = .listening }
+        note = ""
         saveState()
     }
 
@@ -248,7 +259,7 @@ final class Talk: ObservableObject {
     }()
 
     func saveState() {
-        let j: [String: Any] = ["on": on, "state": state.word, "target": target?.name ?? "", "target_tty": target?.tty ?? "",
+        let j: [String: Any] = ["on": on, "state": state.word, "target": target?.name ?? "", "target_device": target?.device ?? "", "target_id": target?.id ?? "", "heard_via": heardVia,
                                 "mic": device?.name ?? "", "lang": lang, "heard": heard, "pid": getpid(),
                                 "time": ISO8601DateFormatter().string(from: Date())]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted]) { try? d.write(to: Talk.stateFile, options: .atomic) }
