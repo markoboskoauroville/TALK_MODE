@@ -25,3 +25,7 @@ Marko, 15.11.2026, word for word:
 ## 15.11.2026, request 5 (v7)
 
 "There should be also a switch, a switch which is like auto advanced mode or manual mode for this kind of chat."
+
+## 15.11.2026, request 6 (v7)
+
+"Yes, but this shortcut is not necessary because now we have mode Auto Advanced and Manual and we have spacebar. So there is no need for this."

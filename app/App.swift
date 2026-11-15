@@ -5,7 +5,7 @@
 // Marko, 15.11.2026: "when I say real time talk mode, you are waiting for me to pause, then you say something and we kind
 // of do this thing together ... I'm not in front of computer I'm in front of the camera".
 //
-// Switch: say "real time talk mode" / "talk mode on", and "typing mode" / "talk mode off"; ⌃⌥T anywhere; the menu bar
+// Switch: say "real time talk mode" / "talk mode on", and "typing mode" / "talk mode off"; the menu bar
 // item; `open -g talkmode://on|off|toggle|repeat|show`. "Say that again" plays the last answer again (/speak/replay).
 // Debug path (no microphone, no window): TalkMode --test-wav FILE --to-tty /dev/ttysNNN [--lang en] [--pause 1.3]
 import AppKit
@@ -357,27 +357,11 @@ struct Root: View {
                 Cell(label: "LAST ANSWER") {
                     Text("SAY IT AGAIN").foregroundStyle(Ink.text).word("Say the last answer again", id: "repeat") { talk.repeatLast() }
                 }
-                Cell(label: "SWITCH") { Text("⌃⌥T").foregroundStyle(Ink.dim).fixedSize() }
             }
             if !talk.note.isEmpty {
                 Text(talk.note).font(.system(size: 13)).foregroundStyle(Ink.amber).fixedSize(horizontal: false, vertical: true)
             }
         }
-    }
-}
-
-// ---------------------------------------------------------------- the global shortcut ⌃⌥T
-enum HotKey {
-    static var ref: EventHotKeyRef?
-    static var action: (() -> Void)?
-    static func register() {
-        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
-            DispatchQueue.main.async { HotKey.action?() }
-            return noErr
-        }, 1, &spec, nil, nil)
-        let id = EventHotKeyID(signature: OSType(0x544B4D44), id: 1)       // "TKMD"
-        RegisterEventHotKey(UInt32(kVK_ANSI_T), UInt32(controlKey | optionKey), id, GetApplicationEventTarget(), 0, &ref)
     }
 }
 
@@ -420,8 +404,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
             }
             return
         }
-        HotKey.action = { Talk.shared.toggle() }
-        HotKey.register()
+        // v7: no global shortcut (Marko, 15.11.2026: "this shortcut is not necessary ... we have mode Auto Advanced and Manual and we have spacebar")
         // listening goes on with the window behind others (no App Nap)
         activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated], reason: "listening for Marko")
         Talk.shared.start()
@@ -528,8 +511,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         m.removeAllItems()
         m.addItem(withTitle: t.state.word, action: nil, keyEquivalent: "")
         m.addItem(.separator())
-        let toggle = NSMenuItem(title: t.on ? "Typing Mode (talk mode off)" : "Talk Mode On", action: #selector(menuToggle), keyEquivalent: "t")
-        toggle.keyEquivalentModifierMask = [.control, .option]; toggle.target = self; m.addItem(toggle)
+        let toggle = NSMenuItem(title: t.on ? "Typing Mode (talk mode off)" : "Talk Mode On", action: #selector(menuToggle), keyEquivalent: "")
+        toggle.target = self; m.addItem(toggle)
         let rec = NSMenuItem(title: t.manual ? "Stop and Send" : "Record (Space in the window)", action: #selector(menuSpace), keyEquivalent: "")
         rec.target = self; m.addItem(rec)
         let mode = NSMenuItem(title: t.auto ? "Mode: Auto (switch to Manual)" : "Mode: Manual (switch to Auto)", action: #selector(menuMode), keyEquivalent: "")
@@ -587,8 +570,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         appMenu.addItem(withTitle: "Quit \(APP_NAME)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu; m.addItem(appItem)
         let talkItem = NSMenuItem(), talkMenu = NSMenu(title: "Talk")
-        let t = NSMenuItem(title: "Talk Mode On / Typing Mode", action: #selector(menuToggle), keyEquivalent: "t")
-        t.keyEquivalentModifierMask = [.control, .option]; t.target = self; talkMenu.addItem(t)
+        let t = NSMenuItem(title: "Talk Mode On / Typing Mode", action: #selector(menuToggle), keyEquivalent: "")
+        t.target = self; talkMenu.addItem(t)
         let r = NSMenuItem(title: "Say the Last Answer Again", action: #selector(menuRepeat), keyEquivalent: "r")
         r.target = self; talkMenu.addItem(r)
         talkItem.submenu = talkMenu; m.addItem(talkItem)

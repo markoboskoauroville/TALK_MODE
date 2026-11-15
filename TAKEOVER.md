@@ -52,7 +52,7 @@ Marko's words of 15.11.2026 are in momentaryupdates.md. Repo: markoboskoaurovill
   no keystrokes into any other app.
 - **Switching.** Spoken: "real time talk mode" / "talk mode on" → on; "typing mode" / "talk mode off" → off (only when the
   phrase is almost all that was said). In typing mode the microphone stays open but only utterances up to 4 s are written
-  down, and only to catch the switch phrase; nothing is sent. Also ⌃⌥T anywhere, the menu bar item, ③, and
+  down, and only to catch the switch phrase; nothing is sent. Also the menu bar item, ③ (the global ⌃⌥T was removed in v7 at Marko's word), and
   `open -g talkmode://on|off|toggle|repeat|show`. The voice confirms: "Talk mode on. I am listening." / "Typing mode."
 - **Repeat.** "say that again", "repeat that", "what did you say" … → `POST /speak/replay` (every reading since his last
   words). Each sent utterance first calls `/speak/seen`, so the replay is the answer to his last words.
