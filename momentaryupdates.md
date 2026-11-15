@@ -79,3 +79,7 @@ Keep the audio of each utterance it sends: ~/Library/Application Support/Talk Mo
 "This app has another annoying feature. It snaps to the top of the window, always. I cannot resize it. I want to make it small, it always jumps to the top. What is this? Please make it normal window. Edges are resizing it in all axis."
 
 **Status:** saved first; built in v13.
+
+## 15.11.2026, request 17 (v13): Whisper hallucinations on silence (from the coordinator, observed 15.11.2026)
+
+While Marko was away, AUTO sent "I'm going to go to the bathroom." (twice), "I'm going to go ahead and start the game.", "I'm going to go get some coffee.": classic Whisper hallucinations on room noise. Guard: real speech energy for 0.6 s above the noise floor; drop known hallucination phrases and near-duplicates within 2 min; drop empty-ish / no_speech results; dropped ones shown briefly as "ignored (noise)" and logged, never sent.

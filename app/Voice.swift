@@ -145,9 +145,17 @@ enum Phrase {
         return .none
     }
 
+    /// v13: Whisper's silence hallucinations: whole phrases, and openings it invents on room noise ("I'm going to go ...")
+    static let hallucinationStarts = ["i m going to go", "im going to go", "i am going to go", "thank you for watching", "thanks for watching",
+                                      "please subscribe", "subtitles by", "subtitled by", "translated by", "amara org", "see you in the next",
+                                      "like and subscribe", "transcribed by", "captions by"]
+    static let moreHallucinations: Set<String> = ["bye", "bye bye", "goodbye", "thank you", "oh", "ah", "the end", "you you", "silence", "no speech", "mm", "mhm"]
+
     static func isNoise(_ text: String) -> Bool {
         let n = norm(text)
-        return n.count < 2 || hallucinations.contains(n)
+        if n.count < 2 || !n.contains(where: { $0.isLetter }) { return true }
+        if hallucinations.contains(n) || moreHallucinations.contains(n) { return true }
+        return hallucinationStarts.contains { n.hasPrefix($0) }
     }
 }
 
@@ -190,6 +198,9 @@ enum Hearing {
         _ = sem.wait(timeout: .now() + 95)
         guard code == 200, let j, j["text"] != nil else { return nil }      // 404: Voice to Text before v23
         let via = label(j["engine"] as? String, j["route"] as? String, j["secs"] as? Double)
+        // v13: the engine's own doubt (Whisper no_speech_prob / confidence, when Voice to Text passes them on) = nothing said
+        if let ns = (j["no_speech_prob"] as? Double) ?? (j["no_speech"] as? Double), ns > 0.6 { return ("", nil, via) }
+        if let cf = j["confidence"] as? Double, cf > 0, cf < 0.35 { return ("", nil, via) }
         if (j["ok"] as? Bool) == true { return ((j["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines), nil, via) }
         let err = j["error"] as? String ?? "no text"
         if err.hasPrefix("nothing said") { return ("", nil, via) }

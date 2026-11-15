@@ -222,8 +222,37 @@ final class Talk: ObservableObject {
         default: break
         }
         guard (on && auto) || forced else { return }
-        if Phrase.isNoise(text) { state = on ? .listening : .typing; return }
+        if Phrase.isNoise(text) { ignore(text, "known noise phrase"); return }
+        if !forced, let why = duplicate(text) { ignore(text, why); return }
+        remember(text)
         send(text)
+    }
+
+    // v13 (Marko 15.11.2026, three Whisper hallucinations sent while he was away): dropped ones never reach the session; they show
+    // for 4 s as "ignored (noise)" and are logged in ignored.log beside state.json
+    private var recent: [(Set<String>, Date)] = []
+    private func words(_ t: String) -> Set<String> { Set(Phrase.norm(t).split(separator: " ").map(String.init)) }
+    private func duplicate(_ text: String) -> String? {
+        let w = words(text)
+        recent.removeAll { Date().timeIntervalSince($0.1) > 120 }
+        for (p, _) in recent where !w.isEmpty {
+            let j = Double(w.intersection(p).count) / Double(max(1, w.union(p).count))
+            if j >= 0.8 { return "same as a sentence of the last 2 minutes" }
+        }
+        return nil
+    }
+    private func remember(_ text: String) { recent.append((words(text), Date())) }
+    private func ignore(_ text: String, _ why: String) {
+        NSLog("[Talk] ignored (noise): %@ (%@)", text, why)
+        state = on ? .listening : .typing
+        if on { note = "ignored (noise): “\(text.prefix(60))”" }
+        let line = "\(ISO8601DateFormatter().string(from: Date()))\t\(why)\t\(text)\n"
+        let url = Talk.stateFile.deletingLastPathComponent().appendingPathComponent("ignored.log")
+        if let d = line.data(using: .utf8) {
+            if let h = try? FileHandle(forWritingTo: url) { h.seekToEndOfFile(); h.write(d); try? h.close() } else { try? d.write(to: url) }
+        }
+        let mine = note
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { if self.note == mine { self.note = "" } }
     }
 
     func send(_ text: String) {

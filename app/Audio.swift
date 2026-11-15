@@ -154,12 +154,15 @@ final class VAD {
     private var silent = 0
     private var framesIn = 0
     private var lastVoice = 0
+    private var voicedFrames = 0
+    private var voicedSumDB: Float = 0
+    private var floorAtStart: Float = -60
     var onStart: (() -> Void)?
     var onUtterance: (([Float], Double) -> Void)?      // samples, voice span in seconds
     var onNoise: ((Double) -> Void)?
     var speaking: Bool { inUtt }
 
-    func reset() { pending = []; pre = []; inUtt = false; utt = []; startRun = 0; silent = 0; framesIn = 0; lastVoice = 0 }
+    func reset() { pending = []; pre = []; inUtt = false; utt = []; startRun = 0; silent = 0; framesIn = 0; lastVoice = 0; voicedFrames = 0; voicedSumDB = 0 }
 
     func feed(_ s: [Float]) {
         pending.append(contentsOf: s)
@@ -173,7 +176,7 @@ final class VAD {
         for x in f { sum += x * x }
         let db = 20 * log10(max(sqrt(sum / Float(f.count)), 1e-7))
         levelDB = db
-        let threshold = max(floorDB + 12, -50)
+        let threshold = max(floorDB + 15, -48)          // v13: real speech energy, a margin above the measured room floor
         let voice = db > threshold
         if !voice {                                   // the floor follows the room, quickly down, slowly up
             floorDB += (db - floorDB) * (db < floorDB ? 0.2 : 0.01)
@@ -187,12 +190,13 @@ final class VAD {
                 inUtt = true
                 utt = pre.flatMap { $0 }
                 framesIn = pre.count; lastVoice = framesIn; silent = 0
+                voicedFrames = 3; voicedSumDB = db * 3; floorAtStart = floorDB
                 onStart?()
             }
             return
         }
         utt.append(contentsOf: f); framesIn += 1
-        if voice { silent = 0; lastVoice = framesIn } else { silent += 1 }
+        if voice { silent = 0; lastVoice = framesIn; voicedFrames += 1; voicedSumDB += db } else { silent += 1 }
         if Double(silent) * secs >= pause || Double(framesIn) * secs >= maxLength { finish(secs) }
     }
 
@@ -205,7 +209,12 @@ final class VAD {
         let keep = min(utt.count, (lastVoice + 10) * frame)          // 300 ms of silence after the last voice
         let samples = Array(utt.prefix(keep))
         utt = []; pre = []; startRun = 0
-        if span >= (forced ? 0.2 : minLength) { onUtterance?(samples, span) } else { onNoise?(span) }
+        // v13: not just any sound: at least 0.6 s of frames that were really above the floor, and loud enough on average
+        let voicedSecs = Double(voicedFrames) * secs
+        let avgDB = voicedFrames > 0 ? voicedSumDB / Float(voicedFrames) : -90
+        let energetic = forced || (voicedSecs >= minLength && avgDB >= floorAtStart + 18)
+        voicedFrames = 0; voicedSumDB = 0
+        if span >= (forced ? 0.2 : minLength) && energetic { onUtterance?(samples, span) } else { onNoise?(span) }
     }
 }
 

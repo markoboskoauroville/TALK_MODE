@@ -1,5 +1,7 @@
 # Talk Mode (Mantra): TAKEOVER
 
+**v13 noise guard (hallucinations on silence):** Audio.swift VAD: threshold floor+15 dB (min -48), an utterance needs >=0.6 s of really voiced frames averaging >=18 dB above the floor; Voice.swift: Phrase.isNoise also drops "thank you", "bye", "I'm going to go ...", subtitle credits, no-letter text, and Voice to Text's no_speech_prob > 0.6 / confidence < 0.35 when passed on; Talk.swift: a sentence ~same (word overlap >= 0.8) as one of the last 2 minutes is dropped (not for SEND NOW/Space). Dropped = note "ignored (noise)" for 4 s + ~/Library/Application Support/Talk Mode (Mantra)/ignored.log, never sent.
+
 **v13, 15.11.2026: a normal window (see WINDOW below), HEARD does not linger (Marko: "annoying text ... heard mother what's happening again").** HEARD shows the words while they are sent and 6 s after, fades out over 0.6 s, then `heard` is empty (also in state.json). Talk.swift `heardChanged`.
 
 **v12, 15.11.2026: RED EDGE while Space Mode is on (app/RedEdge.swift: click-through overlay per screen, all Spaces, above full screen; 7 pt border 70 % + 30 pt falloff 38 % to 0, Sony REC-frame style; removed when SpaceMode.on turns false, so on every exit path incl. the watchdog; `--edge-shot f.png --size WxH` renders it). Always on screen, and plain state words (Marko: "It going out of the screen and is just staying there ... when I change monitors ... it is falling out", "it says paused recording. What is paused?").**
