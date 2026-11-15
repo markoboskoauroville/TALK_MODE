@@ -30,14 +30,14 @@ enum ITerm {
     static let listScript = """
     on run argv
       if application "iTerm2" is not running then return ""
-      set T to character id 9
-      set L to character id 10
+      set sepTab to character id 9
+      set sepLine to character id 10
       set out to ""
       tell application "iTerm2"
-        repeat with w in windows
-          repeat with t in tabs of w
-            repeat with s in sessions of t
-              set out to out & (id of s) & T & (name of s) & T & (tty of s) & L
+        repeat with aWin in windows
+          repeat with aTab in tabs of aWin
+            repeat with aSes in sessions of aTab
+              set out to out & (id of aSes) & sepTab & (name of aSes) & sepTab & (tty of aSes) & sepLine
             end repeat
           end repeat
         end repeat
@@ -51,13 +51,13 @@ enum ITerm {
       set sid to item 1 of argv
       set msg to item 2 of argv
       tell application "iTerm2"
-        repeat with w in windows
-          repeat with t in tabs of w
-            repeat with s in sessions of t
-              if (id of s) is sid then
-                tell s to write text msg newline NO
+        repeat with aWin in windows
+          repeat with aTab in tabs of aWin
+            repeat with aSes in sessions of aTab
+              if (id of aSes) is sid then
+                tell aSes to write text msg newline NO
                 delay 0.6
-                tell s to write text "" newline YES
+                tell aSes to write text "" newline YES
                 return "ok"
               end if
             end repeat

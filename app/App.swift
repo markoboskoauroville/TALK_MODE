@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 1
+let VERSION = 2
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -490,9 +490,9 @@ enum Bench {
         vad.pause = val("--pause").flatMap(Double.init) ?? 1.3
         var done: [([Float], Double)] = []
         var t = 0.0
-        vad.onStart = { out(["event": "voice", "at": (t * 100).rounded() / 100]) }
+        vad.onStart = { out(["event": "voice", "at": String(format: "%.1f", t)]) }
         vad.onNoise = { span in out(["event": "noise", "span": span]) }
-        vad.onUtterance = { s, span in done.append((s, span)); out(["event": "utterance", "at": (t * 100).rounded() / 100, "span": span]) }
+        vad.onUtterance = { s, span in done.append((s, span)); out(["event": "utterance", "at": String(format: "%.1f", t), "span": span]) }
         let gate = Gate.shared
         let chunk = 1600                                                       // 100 ms
         var fed = 0, gated = 0, sent = 0, heardN = 0, wasClosed = false
@@ -502,10 +502,10 @@ enum Bench {
             gate.poll()
             let slice = Array(samples[i..<min(i + chunk, samples.count)])
             if gate.closed {
-                if !wasClosed { vad.reset(); out(["event": "gate-closed", "at": t, "speaking": gate.speaking, "recording": gate.recording]) }
+                if !wasClosed { vad.reset(); out(["event": "gate-closed", "at": String(format: "%.1f", t), "speaking": gate.speaking, "recording": gate.recording]) }
                 wasClosed = true; gated += 1
             } else {
-                if wasClosed { out(["event": "gate-open", "at": t]) }
+                if wasClosed { out(["event": "gate-open", "at": String(format: "%.1f", t)]) }
                 wasClosed = false; vad.feed(slice); fed += 1
             }
             i += chunk; t += 0.1
