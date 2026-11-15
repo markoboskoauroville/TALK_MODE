@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 10
+let VERSION = 11
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -100,6 +100,32 @@ struct Flow: Layout {
     }
 }
 
+/// v11 (Marko, 15.11.2026: "a typical switch in the Mac OS ... looks like ellipse and inside is a small circle ... I want
+/// to see them everywhere"): every on/off choice is the macOS switch (SwiftUI Toggle, .switch style = NSSwitch), its
+/// name beside it, and under it what ON means now. MANTRA_MANIFEST modules/workflow-interface.md.
+struct OnOff: View {
+    let title: String
+    let caption: String
+    let id: String
+    @Binding var isOn: Bool
+    var tint: Color = Ink.green
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Toggle(title, isOn: $isOn)
+                .toggleStyle(.switch).controlSize(.large).labelsHidden().tint(tint)
+                .accessibilityLabel(title).accessibilityIdentifier(id)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 15, weight: .bold, design: .monospaced)).foregroundStyle(isOn ? Ink.text : Ink.grey)
+                Text(caption).font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(Ink.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .contentShape(Rectangle()).onTapGesture { isOn.toggle() }
+            .accessibilityHidden(true)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
 struct Hairline: View { var body: some View { Rectangle().fill(Ink.line).frame(height: 1) } }
 
 /// a horizontal hairline that fills: the level of the microphone
@@ -139,6 +165,7 @@ struct Cell<V: View>: View {
 // ---------------------------------------------------------------- the window
 struct TopRow: View {
     @AppStorage("onTop") private var onTop = false
+    @ObservedObject var space = SpaceMode.shared
     var body: some View {
         ZStack {
             (Text("Talk Mode").fontWeight(.bold) + Text(" (Mantra)").fontWeight(.regular))
@@ -148,6 +175,10 @@ struct TopRow: View {
                 Text("ON").foregroundStyle(Ink.green)
                 Text("OFF").foregroundStyle(Ink.grey).word("Off, quit Talk Mode", id: "off") { DispatchQueue.main.async { NSApp.terminate(nil) } }
                 Spacer()
+                if !space.trusted && App.shot == nil {      // v11: Space Mode's keyboard tap needs Accessibility (never allowed for him)
+                    Text("PERMISSIONS").foregroundStyle(Ink.amber)
+                        .word("Permissions: Accessibility for Space Mode", id: "permissions") { SpaceMode.openAccessibilitySettings() }
+                }
                 Text("v\(VERSION)").foregroundStyle(Ink.dim)
                 Text("TOP").foregroundStyle(onTop ? Ink.green : Ink.grey)
                     .word("Top", id: "top", value: onTop ? "on" : "off") { onTop.toggle(); TopRow.float(onTop) }
@@ -269,7 +300,7 @@ struct EnginePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 14) {
-                Text("ENGINES · " + (talk.lang == "hr" ? "CROATIAN" : "ENGLISH"))
+                Text("ENGINES · " + (talk.panelLang == "hr" ? "CROATIAN" : "ENGLISH"))
                     .font(.system(size: size * 1.2, weight: .black, design: .rounded)).fixedSize()
                 Spacer(minLength: 8)
                 HStack(spacing: 6) {
@@ -306,6 +337,7 @@ struct EnginePanel: View {
 
 struct Root: View {
     @ObservedObject var talk = Talk.shared
+    @ObservedObject var space = SpaceMode.shared
 
     /// a long sentence keeps its last 220 characters on screen (the words are all in the session)
     func shown(_ s: String) -> String { s.count > 220 ? "…" + s.suffix(220) : s }
@@ -317,13 +349,13 @@ struct Root: View {
                 let big = max(40, min(g.size.width / 7.5, g.size.height / 3.4, 170))
                 VStack(spacing: big * 0.22) {
                     Spacer(minLength: 0)
-                    Text(talk.auto ? "AUTO" : "MANUAL")
-                        .font(.system(size: max(20, big * 0.34), weight: .black, design: .rounded))
-                        .foregroundStyle(talk.auto ? Ink.green : Ink.amber)
-                        .padding(.horizontal, 14).padding(.vertical, 2)
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(talk.auto ? Ink.green : Ink.amber, lineWidth: 2))
-                        .fixedSize()
-                        .word(talk.auto ? "Mode auto" : "Mode manual", id: "mode-big") { talk.auto.toggle() }
+                    if space.on || talk.spacePreview {
+                        Text("SPACE MODE · SPACE TALKS")
+                            .font(.system(size: max(18, big * 0.26), weight: .black, design: .rounded))
+                            .foregroundStyle(Ink.orange).multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("space-word")
+                    }
                     Text(!talk.auto && talk.state == .listening ? "PRESS SPACE" : talk.state.word)
                         .font(.system(size: big, weight: .black, design: .rounded))
                         .foregroundStyle(Ink.of(talk.state))
@@ -336,13 +368,6 @@ struct Root: View {
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("heard")
-                        if !talk.heardVia.isEmpty {
-                            Text("WRITTEN DOWN BY  " + talk.heardVia)
-                                .font(.system(size: max(13, big * 0.12), weight: .semibold, design: .monospaced))
-                                .foregroundStyle(Ink.dim).multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .accessibilityIdentifier("heard-via")
-                        }
                     }
                     SendNowButton(talk: talk, size: max(16, big * 0.2))
                     Spacer(minLength: 0)
@@ -360,90 +385,31 @@ struct Root: View {
         .foregroundStyle(Ink.text)
     }
 
+    /// v11 (Marko, 15.11.2026: "These are unnecessary parts, language, ears ... language is in my transcription blob"):
+    /// the window keeps the state, HEARD, SEND NOW, ① TALK TO and the switches; microphone, pause, noise limit, say it
+    /// again and the engines are in the menu bar's TALK menu.
     var steps: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Flow(spacing: 26) {
+            Flow(spacing: 30) {
                 HStack(spacing: 8) {
                     StepNumber(n: 1)
-                    Cell(label: "TALK TO") {
-                        SessionPicker(talk: talk)
-                    }
+                    Cell(label: "TALK TO") { SessionPicker(talk: talk) }
                 }
                 HStack(spacing: 8) {
                     StepNumber(n: 2)
-                    Cell(label: "MICROPHONE") {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Menu {
-                                ForEach(talk.devices, id: \.self) { d in Button(d.name) { talk.choose(d) } }
-                                Divider()
-                                Button("Look for microphones again") { talk.refreshDevices() }
-                            } label: { Text(talk.device?.name ?? "NONE").foregroundStyle(talk.device == nil ? Ink.red : Ink.text) }
-                            .menuStyle(.borderlessButton).fixedSize()
-                            .accessibilityLabel("Microphone")
-                            Fill(value: Double((talk.levelDB + 70) / 60)).frame(width: 160)
-                        }
-                    }
+                    OnOff(title: "TALK MODE", caption: talk.on ? "listening and sending" : "typing: only the switch phrase",
+                          id: "talk-mode", isOn: Binding(get: { talk.on }, set: { talk.setOn($0) }))
                 }
-                HStack(spacing: 8) {
-                    StepNumber(n: 3)
-                    Cell(label: "TALK MODE") {
-                        HStack(spacing: 6) {
-                            Text("ON").foregroundStyle(talk.on ? Ink.green : Ink.grey)
-                                .word("Talk mode on", id: "talk-on", value: talk.on ? "on" : "off") { if !talk.on { talk.setOn(true) } }
-                            Text("|").foregroundStyle(Ink.dim)
-                            Text("TYPING").foregroundStyle(talk.on ? Ink.grey : Ink.text)
-                                .word("Typing mode", id: "talk-off", value: talk.on ? "off" : "on") { if talk.on { talk.setOn(false) } }
-                        }
-                    }
-                }
+                OnOff(title: talk.auto ? "AUTO" : "MANUAL", caption: talk.auto ? "sends after the pause" : "SPACE records, SPACE sends",
+                      id: "auto", isOn: Binding(get: { talk.auto }, set: { talk.auto = $0 }))
+                OnOff(title: "SPACE MODE", caption: space.on || talk.spacePreview ? "keyboard and mouse off · SPACE talks" : "keyboard and mouse off, SPACE anywhere",
+                      id: "space-mode", isOn: Binding(get: { space.on || space.starting || talk.spacePreview },
+                                                      set: { v in v ? space.enable() : space.disable("switch") }), tint: Ink.orange)
             }
-            Hairline()
-            Flow(spacing: 26) {
-                Cell(label: "LANGUAGE") {
-                    HStack(spacing: 6) {
-                        Text("EN").foregroundStyle(talk.lang == "en" ? Ink.green : Ink.grey).word("English", id: "lang-en", value: talk.lang == "en" ? "on" : "off") { talk.lang = "en" }
-                        Text("|").foregroundStyle(Ink.dim)
-                        Text("HR").foregroundStyle(talk.lang == "hr" ? Ink.green : Ink.grey).word("Croatian", id: "lang-hr", value: talk.lang == "hr" ? "on" : "off") { talk.lang = "hr" }
-                    }
-                }
-                Cell(label: "EARS · TIME · QUALITY") {
-                    HStack(spacing: 10) {
-                        Text(talk.earsText(talk.lang)).fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("ears")
-                        Text(talk.enginesOpen ? "CLOSE" : "CHANGE").foregroundStyle(Ink.amber).fixedSize()
-                            .word(talk.enginesOpen ? "Close the engines" : "Change the engine", id: "engines") {
-                                talk.enginesOpen ? talk.closeEngines() : talk.openEngines() }
-                    }
-                }
-                Cell(label: "PAUSE THAT ENDS A SENTENCE") {
-                    HStack(spacing: 6) {
-                        Text("−").foregroundStyle(Ink.grey).word("Shorter pause", id: "pause-less") { talk.pause = max(0.6, ((talk.pause - 0.1) * 10).rounded() / 10) }
-                        Text(String(format: "%.1f sec", talk.pause)).fixedSize()
-                        Text("+").foregroundStyle(Ink.grey).word("Longer pause", id: "pause-more") { talk.pause = min(4, ((talk.pause + 0.1) * 10).rounded() / 10) }
-                    }
-                }
-                Cell(label: "SHORTER IS A NOISE") {
-                    HStack(spacing: 6) {
-                        Text("−").foregroundStyle(Ink.grey).word("Shorter noise limit", id: "noise-less") { talk.minLength = max(0.2, ((talk.minLength - 0.1) * 10).rounded() / 10) }
-                        Text(String(format: "%.1f sec", talk.minLength)).fixedSize()
-                        Text("+").foregroundStyle(Ink.grey).word("Longer noise limit", id: "noise-more") { talk.minLength = min(2, ((talk.minLength + 0.1) * 10).rounded() / 10) }
-                    }
-                }
-                Cell(label: "SENDS") {
-                    HStack(spacing: 6) {
-                        Text("AUTO").foregroundStyle(talk.auto ? Ink.green : Ink.grey)
-                            .word("Auto: sends after the pause", id: "mode-auto", value: talk.auto ? "on" : "off") { talk.auto = true }
-                        Text("|").foregroundStyle(Ink.dim)
-                        Text("MANUAL").foregroundStyle(talk.auto ? Ink.grey : Ink.amber)
-                            .word("Manual: Space records, Space again sends", id: "mode-manual", value: talk.auto ? "off" : "on") { talk.auto = false }
-                    }
-                }
-                Cell(label: "LAST ANSWER") {
-                    Text("SAY IT AGAIN").foregroundStyle(Ink.text).word("Say the last answer again", id: "repeat") { talk.repeatLast() }
-                }
-            }
-            if !talk.note.isEmpty {
-                Text(talk.note).font(.system(size: 13)).foregroundStyle(Ink.amber).fixedSize(horizontal: false, vertical: true)
+            let n = space.note.isEmpty ? talk.note : space.note
+            if !n.isEmpty {
+                Text(n).font(.system(size: 13)).foregroundStyle(Ink.amber).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("note")
             }
         }
     }
@@ -523,6 +489,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         case "toggle": Talk.shared.toggle()
         case "repeat": Talk.shared.repeatLast()
         case "show": showWindow()
+        case "space-on": SpaceMode.shared.enable()
+        case "space-off": SpaceMode.shared.disable("url")
+        case "space-test": SpaceMode.shared.enable(testSeconds: 10)      // the self-disabling test: off by itself after 10 s
         default: NSLog("[Talk] unknown url %@", s)
         }
     }
@@ -595,8 +564,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
 
     func refreshStatusItem() {
         let t = Talk.shared
-        let colour: NSColor = t.on ? NSColor(red: 0.2, green: 0.82, blue: 0.48, alpha: 1) : .secondaryLabelColor
-        status?.button?.attributedTitle = NSAttributedString(string: t.on ? "TALK" : "talk", attributes: [
+        let sp = SpaceMode.shared.on
+        let colour: NSColor = sp ? NSColor(red: 0.91, green: 0.45, blue: 0.23, alpha: 1) : t.on ? NSColor(red: 0.2, green: 0.82, blue: 0.48, alpha: 1) : .secondaryLabelColor
+        status?.button?.attributedTitle = NSAttributedString(string: sp ? "SPACE" : t.on ? "TALK" : "talk", attributes: [
             .foregroundColor: colour, .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .bold)])
     }
 
@@ -609,8 +579,11 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         toggle.target = self; m.addItem(toggle)
         let rec = NSMenuItem(title: t.manual ? "Stop and Send" : "Record (Space in the window)", action: #selector(menuSpace), keyEquivalent: "")
         rec.target = self; m.addItem(rec)
-        let mode = NSMenuItem(title: t.auto ? "Mode: Auto (switch to Manual)" : "Mode: Manual (switch to Auto)", action: #selector(menuMode), keyEquivalent: "")
-        mode.target = self; m.addItem(mode)
+        let mode = NSMenuItem(title: "Auto (off = Manual)", action: #selector(menuMode), keyEquivalent: "")
+        mode.target = self; mode.state = t.auto ? .on : .off; m.addItem(mode)
+        let sp = NSMenuItem(title: SpaceMode.shared.on ? "Space Mode (keyboard and mouse off): turn off" : "Space Mode (keyboard and mouse off)",
+                            action: #selector(menuSpaceMode), keyEquivalent: "")
+        sp.target = self; sp.state = SpaceMode.shared.on ? .on : .off; m.addItem(sp)
         let eng = NSMenuItem(title: "Engines… (Voice to Text)", action: #selector(menuEngines), keyEquivalent: ""); eng.target = self; m.addItem(eng)
         let now = NSMenuItem(title: "Send Now", action: #selector(menuSendNow), keyEquivalent: ""); now.target = self; m.addItem(now)
         let again = NSMenuItem(title: "Say the Last Answer Again", action: #selector(menuRepeat), keyEquivalent: ""); again.target = self; m.addItem(again)
@@ -633,12 +606,20 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
             i.target = self; i.representedObject = d.uid; i.state = d.uid == t.device?.uid ? .on : .off; mm.addItem(i)
         }
         mic.submenu = mm; m.addItem(mic)
-        let lang = NSMenuItem(title: "Language", action: nil, keyEquivalent: ""), lm = NSMenu()
-        for (code, name) in [("en", "English"), ("hr", "Croatian")] {
-            let i = NSMenuItem(title: name + " · " + t.earsText(code), action: #selector(menuLang(_:)), keyEquivalent: "")
-            i.target = self; i.representedObject = code; i.state = t.lang == code ? .on : .off; lm.addItem(i)
+        // v11: what left the window lives here: the pause and the noise limit (the language is Voice to Text's own pill)
+        let pz = NSMenuItem(title: String(format: "Pause That Ends a Sentence · %.1f s", t.pause), action: nil, keyEquivalent: ""), pm = NSMenu()
+        for v in [0.8, 1.0, 1.3, 1.6, 2.0, 2.5, 3.0] {
+            let i = NSMenuItem(title: String(format: "%.1f s", v), action: #selector(menuPause(_:)), keyEquivalent: "")
+            i.target = self; i.representedObject = v; i.state = abs(t.pause - v) < 0.05 ? .on : .off; pm.addItem(i)
         }
-        lang.submenu = lm; m.addItem(lang)
+        pz.submenu = pm; m.addItem(pz)
+        let nz = NSMenuItem(title: String(format: "Shorter Is a Noise · %.1f s", t.minLength), action: nil, keyEquivalent: ""), nm = NSMenu()
+        for v in [0.3, 0.4, 0.6, 0.8, 1.0, 1.5] {
+            let i = NSMenuItem(title: String(format: "%.1f s", v), action: #selector(menuNoise(_:)), keyEquivalent: "")
+            i.target = self; i.representedObject = v; i.state = abs(t.minLength - v) < 0.05 ? .on : .off; nm.addItem(i)
+        }
+        nz.submenu = nm; m.addItem(nz)
+        m.addItem(withTitle: "Language: " + (t.lang == "auto" ? "Auto" : t.lang.uppercased()) + " (set in Voice to Text)", action: nil, keyEquivalent: "")
         m.addItem(.separator())
         let show = NSMenuItem(title: "Show Window", action: #selector(menuShow), keyEquivalent: ""); show.target = self; m.addItem(show)
         m.addItem(withTitle: "Quit \(APP_NAME)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -658,7 +639,10 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     @objc func menuMic(_ i: NSMenuItem) {
         if let uid = i.representedObject as? String, let d = Talk.shared.devices.first(where: { $0.uid == uid }) { Talk.shared.choose(d) }
     }
-    @objc func menuLang(_ i: NSMenuItem) { if let c = i.representedObject as? String { Talk.shared.lang = c } }
+    @objc func menuSpaceMode() { SpaceMode.shared.toggle() }
+    @objc func menuPause(_ i: NSMenuItem) { if let v = i.representedObject as? Double { Talk.shared.pause = v } }
+    @objc func menuNoise(_ i: NSMenuItem) { if let v = i.representedObject as? Double { Talk.shared.minLength = v } }
+    func applicationWillTerminate(_ n: Notification) { SpaceMode.shared.disable("quit", speak: false) }
 
     private func mainMenu() {
         let m = NSMenu()

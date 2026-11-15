@@ -18,3 +18,10 @@
   to type into it from the Mac that cannot land in another app. Listed greyed with that reason until a tmux (or a socket)
   exists on the phone.
 
+- 15.11.2026 (v11): Space Mode reuses Macro Recorder's lock instead of a second banner, but the lock as it was (v27) would
+  have recorded and replayed every Space at the end, cut a long sentence at 420 pt, and left the GIVE THE MAC BACK blob
+  (which refuses Claude's macro runs) after TAKE OVER. Macro Recorder v28 grew options for a holder that owns the keyboard
+  (keys pass, plain bar, no blob, esc_hold, a beat watchdog) rather than Talk Mode drawing its own bar.
+- 15.11.2026 (v11): the keyboard tap sits at the HID level, before Macro Recorder's session tap, and on the main run loop:
+  a frozen Talk Mode cannot hold the keyboard (macOS disables a tap that does not answer), and its frozen main thread stops
+  the beats, so Macro Recorder lifts the mouse lock within 5 s.

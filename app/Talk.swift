@@ -39,7 +39,8 @@ final class Talk: ObservableObject {
     @Published private(set) var scanning = false
     @Published private(set) var devices: [InputDevice] = []
     @Published private(set) var device: InputDevice?
-    @Published var lang: String { didSet { UserDefaults.standard.set(lang, forKey: "lang"); saveState() } }
+    /// v11: the language is Voice to Text's (its pill: EN, HR or AUTO), read from its /status; no selector here any more
+    @Published private(set) var lang: String = "en"
     @Published var pause: Double { didSet { UserDefaults.standard.set(pause, forKey: "pause"); work.async { self.vad.pause = self.pause } } }
     @Published var minLength: Double { didSet { UserDefaults.standard.set(minLength, forKey: "minLength"); work.async { self.vad.minLength = self.minLength } } }
 
@@ -49,13 +50,19 @@ final class Talk: ObservableObject {
     func refreshEars() {
         DispatchQueue.global().async {
             let l = Hearing.engineLabels()
-            DispatchQueue.main.async { if !l.isEmpty { self.earsLabel = l } }
+            let lg = Hearing.currentLang()
+            DispatchQueue.main.async {
+                if !l.isEmpty { self.earsLabel = l }
+                if let lg, lg != self.lang { self.lang = lg; self.saveState() }
+            }
         }
     }
     func earsText(_ code: String) -> String { earsLabel[code] ?? "Voice to Text not answering" }
 
     /// v6: Space / SEND NOW. `manual` (main) is the push-to-talk take; manualOn/manualBuf/forcedFlag live on the work queue
     @Published private(set) var manual = false
+    /// --preview space: the window as it looks with SPACE MODE on (nothing is locked)
+    @Published private(set) var spacePreview = false
     /// v7 (Marko, 15.11.2026: "a switch which is like auto advanced mode or manual mode"): AUTO sends after the pause;
     /// MANUAL sends nothing by itself: Space (or the button) records, the second Space / SEND NOW sends
     @Published var auto: Bool = UserDefaults.standard.object(forKey: "autoMode") as? Bool ?? true {
@@ -77,7 +84,6 @@ final class Talk: ObservableObject {
     private init() {
         let d = UserDefaults.standard
         on = d.bool(forKey: "talkOn")
-        lang = d.string(forKey: "lang") ?? "en"
         pause = d.object(forKey: "pause") as? Double ?? 1.3
         minLength = d.object(forKey: "minLength") as? Double ?? 0.6
         refreshEars()
@@ -139,7 +145,7 @@ final class Talk: ObservableObject {
         let talking = DispatchQueue.main.sync { self.on && (self.auto || forced) }
         if !talking && !forced && span > 4 { DispatchQueue.main.async { self.voiceEnded() }; return }   // typing mode: only short phrases
         DispatchQueue.main.async { if forced { self.state = .sending } else if self.on { self.state = .writing } }
-        let language = DispatchQueue.main.sync { self.lang }
+        let language = Hearing.currentLang() ?? DispatchQueue.main.sync { self.lang }   // v11: Voice to Text's language, now
         if talking || forced { keepTake(s) }
         hearQ.async {
             let r = Hearing.hear(s, lang: talking || forced ? language : "en")
@@ -162,6 +168,10 @@ final class Talk: ObservableObject {
             return
         }
         NSLog("[Talk] heard (%@): %@", on ? "talk" : "typing", text)
+        // v11: in Space Mode, "space mode off" / "go out of this mode" / "I want my keyboard back" ends it (never sent)
+        if SpaceMode.shared.on, SpaceExit.matches(text) {
+            heard = text; SpaceMode.shared.disable("voice"); state = on ? .listening : .typing; return
+        }
         switch Phrase.classify(text) {
         case .on:
             if !on { setOn(true) } else { state = .listening }
@@ -241,11 +251,13 @@ final class Talk: ObservableObject {
     @Published var engineCursor = 0
     @Published private(set) var engineNote = ""
 
+    /// the panel's language: Voice to Text's; AUTO uses its Croatian engine, as Voice to Text itself does
+    var panelLang: String { lang == "auto" ? "hr" : lang }
     func openEngines() { enginesOpen = true; engineNote = "reading Voice to Text…"; loadEngines(moveCursor: true) }
     func closeEngines() { enginesOpen = false }
 
     func loadEngines(moveCursor: Bool = false) {
-        let l = lang, by = engineSort
+        let l = panelLang, by = engineSort
         DispatchQueue.global().async {
             let rows = Hearing.engines(lang: l).map { Hearing.sorted($0, by: by) }
             DispatchQueue.main.async {
@@ -258,7 +270,7 @@ final class Talk: ObservableObject {
     }
 
     func pickEngine(_ id: String) {
-        let l = lang
+        let l = panelLang
         engineNote = "switching…"
         DispatchQueue.global().async {
             let (ok, what) = Hearing.select(id, lang: l)
@@ -320,6 +332,7 @@ final class Talk: ObservableObject {
                                         "manual": .manual, "sending": .sending]
         state = all[what] ?? .listening
         manual = what == "manual"
+        spacePreview = what == "space"
         if what == "engines" {
             enginesOpen = true
             engines = Hearing.sorted([
@@ -420,7 +433,7 @@ final class Talk: ObservableObject {
 
     func saveState() {
         let j: [String: Any] = ["on": on, "state": state.word, "target": target?.name ?? "", "target_device": target?.device ?? "", "target_id": target?.id ?? "", "heard_via": heardVia,
-                                "mic": device?.name ?? "", "lang": lang, "last_take": lastTake, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
+                                "mic": device?.name ?? "", "lang": lang, "space_mode": SpaceMode.shared.on, "last_take": lastTake, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
                                 "time": ISO8601DateFormatter().string(from: Date())]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted]) { try? d.write(to: Talk.stateFile, options: .atomic) }
     }

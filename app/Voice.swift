@@ -169,6 +169,13 @@ enum Hearing {
         return (v.text, v.error, "MANTRA_VOICE Whisper (Voice to Text did not answer)")
     }
 
+    /// v11 (Marko, 15.11.2026: "language is in my transcription blob. I can adjust everything and this is what is the
+    /// default"): the language is Voice to Text's own, as its pill shows it (GET /status "language": en, hr or auto)
+    static func currentLang() -> String? {
+        guard let j = json("/status"), let l = j["language"] as? String, ["en", "hr", "auto"].contains(l) else { return nil }
+        return l
+    }
+
     static func viaAPI(_ wav: Data, lang: String) -> (String?, String?, String)? {
         guard let url = URL(string: api + "/hear?lang=\(lang)") else { return nil }
         var r = URLRequest(url: url, timeoutInterval: 90)
@@ -192,7 +199,7 @@ enum Hearing {
     static func viaBinary(_ wav: Data, lang: String) -> (String?, String?, String)? {
         guard FileManager.default.isExecutableFile(atPath: vttBinary) else { return nil }
         let prefs = UserDefaults(suiteName: "com.mantra.voicetotext")
-        let engine = prefs?.string(forKey: "engine_" + lang) ?? "assemblyai"
+        let engine = prefs?.string(forKey: "engine_" + (lang == "auto" ? "hr" : lang)) ?? "assemblyai"
         let f = FileManager.default.temporaryDirectory.appendingPathComponent("talkmode-\(UUID().uuidString).wav")
         guard (try? wav.write(to: f)) != nil else { return nil }
         defer { try? FileManager.default.removeItem(at: f) }
