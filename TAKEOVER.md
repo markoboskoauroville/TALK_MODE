@@ -55,6 +55,14 @@ The WAV is fed in real time (100 ms chunks) through the same Gate, detector, `/h
 JSON line per step (`loaded`, `voice`, `utterance`, `heard`, `sent`, `gate-closed`, `done`). Run it from an iTerm2 tab:
 iTerm2 talking to itself needs no Automation permission. Target a throwaway tab running `cat`, never a real session.
 
+## Proven 15.11.2026 (v2/v3, debug path)
+
+`say` sentence + a 0.2 s click + "Say that again." in one WAV: voice at 2.0 s, utterance 3.6 s, written down word for
+word, delivered to a throwaway iTerm2 window running `cat -u` (echoed back, so Return arrived); the click ignored as noise;
+"Say that again." recognised as the repeat phrase. With a reading playing on BlackHole: gate closed for 14.7 s, 147 of 158
+chunks dropped, nothing heard, nothing sent. Window drawn off screen at 1100×720 and 720×500: one title, nothing cut.
+Not yet: the live microphone (needs Marko's Microphone permission) and the first send by the app itself (Automation).
+
 ## Install (nothing compiles on the Mac)
 
     gh release download --repo markoboskoauroville/TALK_MODE --pattern app.zip -D /tmp/tm --clobber
