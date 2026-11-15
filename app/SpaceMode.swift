@@ -23,7 +23,7 @@ final class SpaceMode: ObservableObject {
     static let macroAPI = "http://127.0.0.1:8829"
     static let MACRO_MARK: Int64 = 0x4D41_4352_4F4B        // Macro Recorder's own events pass every lock
 
-    @Published private(set) var on = false
+    @Published private(set) var on = false { didSet { if on != oldValue { RedEdge.set(on) } } }
     @Published private(set) var starting = false
     @Published var note = ""
     @Published private(set) var trusted = AXIsProcessTrusted()

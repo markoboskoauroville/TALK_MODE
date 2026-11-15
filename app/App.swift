@@ -818,6 +818,12 @@ enum Main {
             for d in Devices.inputs() { print("\(d.uid == pick?.uid ? "*" : " ") \(d.name)\t\(d.uid)") }
             exit(0)
         }
+        if let i = args.firstIndex(of: "--edge-shot"), i + 1 < args.count {
+            _ = NSApplication.shared
+            var w = 1512, h = 982
+            if let j = args.firstIndex(of: "--size"), j + 1 < args.count { let p = args[j + 1].split(separator: "x").compactMap { Int($0) }; if p.count == 2 { w = p[0]; h = p[1] } }
+            RedEdge.shot(args[i + 1], w, h); exit(0)
+        }
         let app = NSApplication.shared
         app.setActivationPolicy(args.contains("--shot") ? .accessory : .regular)
         app.delegate = App.shared

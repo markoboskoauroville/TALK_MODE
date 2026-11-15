@@ -61,3 +61,9 @@ Keep the audio of each utterance it sends: ~/Library/Application Support/Talk Mo
 "Please update the talk mode again. User interface is disaster. It going out of the screen and is just staying there. Please make it understand when I leave it somewhere that nothing is going out of the display. It needs to adjust its height and heights so I see the bottom of the thing. and especially in When I change monitors then so monitors a different size then it is falling out ... You are giving confusing messages in this talk mode. I am recording now, it says paused recording. What is paused? I am recording right now, there is no pause at all. It is recording. What is this paused?"
 
 **Status:** saved first; built in v12.
+
+## 15.11.2026, request 14 (v12): the red edge in Space Mode
+
+"Space mode, please, when you do space mode, put the red edge, same as on Sony camera, we already have this summary manifest, when Sony camera records, there is a red around it, it means it's doing something special, and this thing is also something special, so put the red, half transparent, soft vignette, but not too soft, same as on Sony. Look at the Sony pictures on the internet and make me the same outline so I understand I'm in space mode."
+
+**Status:** saved first; built in v12.
