@@ -56,6 +56,11 @@ final class Talk: ObservableObject {
 
     /// v6: Space / SEND NOW. `manual` (main) is the push-to-talk take; manualOn/manualBuf/forcedFlag live on the work queue
     @Published private(set) var manual = false
+    /// v7 (Marko, 15.11.2026: "a switch which is like auto advanced mode or manual mode"): AUTO sends after the pause;
+    /// MANUAL sends nothing by itself: Space (or the button) records, the second Space / SEND NOW sends
+    @Published var auto: Bool = UserDefaults.standard.object(forKey: "autoMode") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(auto, forKey: "autoMode"); saveState(); App.shared.refreshStatusItem() }
+    }
     private var manualOn = false
     private var manualBuf: [Float] = []
     private var forcedFlag = false
@@ -131,21 +136,22 @@ final class Talk: ObservableObject {
 
     private func utterance(_ s: [Float], _ span: Double) {
         let forced = forcedFlag
-        let talking = DispatchQueue.main.sync { self.on }
+        let talking = DispatchQueue.main.sync { self.on && (self.auto || forced) }
         if !talking && !forced && span > 4 { DispatchQueue.main.async { self.voiceEnded() }; return }   // typing mode: only short phrases
         DispatchQueue.main.async { if forced { self.state = .sending } else if self.on { self.state = .writing } }
         let language = DispatchQueue.main.sync { self.lang }
         hearQ.async {
             let r = Hearing.hear(s, lang: talking || forced ? language : "en")
             DispatchQueue.main.async {
-                self.heardVia = r.via; self.handle(r.text, error: r.error, forced: forced); self.refreshEars()
+                if talking { self.heardVia = r.via }
+                self.handle(r.text, error: r.error, forced: forced); self.refreshEars()
                 if self.state == .sending { self.state = self.on ? .listening : .typing }
             }
         }
     }
 
     // ------------------------------------------------------------ main thread
-    private func voiceStarted() { if on, state == .listening { state = .hearing } }
+    private func voiceStarted() { if on, auto, state == .listening { state = .hearing } }
     private func voiceEnded() { if on, state == .hearing { state = .listening } }
 
     private func handle(_ text: String?, error: String?, forced: Bool = false) {
@@ -162,14 +168,14 @@ final class Talk: ObservableObject {
         case .off:
             if on { setOn(false) }
             return
-        case .repeatLast where on:
+        case .repeatLast where on && (auto || forced):
             heard = text; note = "saying the last answer again"
             Voice.replay()
             state = .listening
             return
         default: break
         }
-        guard on || forced else { return }
+        guard (on && auto) || forced else { return }
         if Phrase.isNoise(text) { state = on ? .listening : .typing; return }
         send(text)
     }
@@ -331,7 +337,7 @@ final class Talk: ObservableObject {
 
     func saveState() {
         let j: [String: Any] = ["on": on, "state": state.word, "target": target?.name ?? "", "target_device": target?.device ?? "", "target_id": target?.id ?? "", "heard_via": heardVia,
-                                "mic": device?.name ?? "", "lang": lang, "heard": heard, "pid": getpid(),
+                                "mic": device?.name ?? "", "lang": lang, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
                                 "time": ISO8601DateFormatter().string(from: Date())]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted]) { try? d.write(to: Talk.stateFile, options: .atomic) }
     }

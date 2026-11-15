@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 6
+let VERSION = 7
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -240,7 +240,14 @@ struct Root: View {
                 let big = max(40, min(g.size.width / 7.5, g.size.height / 3.4, 170))
                 VStack(spacing: big * 0.22) {
                     Spacer(minLength: 0)
-                    Text(talk.state.word)
+                    Text(talk.auto ? "AUTO" : "MANUAL")
+                        .font(.system(size: max(20, big * 0.34), weight: .black, design: .rounded))
+                        .foregroundStyle(talk.auto ? Ink.green : Ink.amber)
+                        .padding(.horizontal, 14).padding(.vertical, 2)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(talk.auto ? Ink.green : Ink.amber, lineWidth: 2))
+                        .fixedSize()
+                        .word(talk.auto ? "Mode auto" : "Mode manual", id: "mode-big") { talk.auto.toggle() }
+                    Text(!talk.auto && talk.state == .listening ? "PRESS SPACE" : talk.state.word)
                         .font(.system(size: big, weight: .black, design: .rounded))
                         .foregroundStyle(Ink.of(talk.state))
                         .multilineTextAlignment(.center)
@@ -336,6 +343,15 @@ struct Root: View {
                         Text("−").foregroundStyle(Ink.grey).word("Shorter noise limit", id: "noise-less") { talk.minLength = max(0.2, ((talk.minLength - 0.1) * 10).rounded() / 10) }
                         Text(String(format: "%.1f sec", talk.minLength)).fixedSize()
                         Text("+").foregroundStyle(Ink.grey).word("Longer noise limit", id: "noise-more") { talk.minLength = min(2, ((talk.minLength + 0.1) * 10).rounded() / 10) }
+                    }
+                }
+                Cell(label: "SENDS") {
+                    HStack(spacing: 6) {
+                        Text("AUTO").foregroundStyle(talk.auto ? Ink.green : Ink.grey)
+                            .word("Auto: sends after the pause", id: "mode-auto", value: talk.auto ? "on" : "off") { talk.auto = true }
+                        Text("|").foregroundStyle(Ink.dim)
+                        Text("MANUAL").foregroundStyle(talk.auto ? Ink.grey : Ink.amber)
+                            .word("Manual: Space records, Space again sends", id: "mode-manual", value: talk.auto ? "off" : "on") { talk.auto = false }
                     }
                 }
                 Cell(label: "LAST ANSWER") {
@@ -516,6 +532,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         toggle.keyEquivalentModifierMask = [.control, .option]; toggle.target = self; m.addItem(toggle)
         let rec = NSMenuItem(title: t.manual ? "Stop and Send" : "Record (Space in the window)", action: #selector(menuSpace), keyEquivalent: "")
         rec.target = self; m.addItem(rec)
+        let mode = NSMenuItem(title: t.auto ? "Mode: Auto (switch to Manual)" : "Mode: Manual (switch to Auto)", action: #selector(menuMode), keyEquivalent: "")
+        mode.target = self; m.addItem(mode)
         let now = NSMenuItem(title: "Send Now", action: #selector(menuSendNow), keyEquivalent: ""); now.target = self; m.addItem(now)
         let again = NSMenuItem(title: "Say the Last Answer Again", action: #selector(menuRepeat), keyEquivalent: ""); again.target = self; m.addItem(again)
         m.addItem(.separator())
@@ -552,6 +570,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     @objc func menuToggle() { Talk.shared.toggle() }
     @objc func menuSpace() { Talk.shared.spacePressed() }
     @objc func menuSendNow() { Talk.shared.sendNow() }
+    @objc func menuMode() { Talk.shared.auto.toggle() }
     @objc func menuRepeat() { Talk.shared.repeatLast() }
     @objc func menuShow() { showWindow() }
     @objc func menuSession(_ i: NSMenuItem) {

@@ -21,3 +21,7 @@ Marko, 15.11.2026, word for word:
 ## 15.11.2026, request 4 (v5)
 
 "build button to send transcription now without waiting shortcut key if app is in focus is space for both star recording and transcribe"
+
+## 15.11.2026, request 5 (v7)
+
+"There should be also a switch, a switch which is like auto advanced mode or manual mode for this kind of chat."
