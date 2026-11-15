@@ -50,7 +50,22 @@ final class Talk: ObservableObject {
 
     @Published private(set) var on: Bool
     @Published private(set) var state: TalkState = .typing
-    @Published private(set) var heard = ""
+    @Published private(set) var heard = "" { didSet { heardChanged() } }
+    /// v13 (Marko, 15.11.2026: "annoying text ... heard mother what's happening again"): HEARD lives only while the words are
+    /// being sent and 6 s after; then it clears (the view fades it). `heardFresh` is false for the fade.
+    @Published private(set) var heardFresh = true
+    private var heardTimer: Timer?
+    private func heardChanged() {
+        heardTimer?.invalidate()
+        guard !heard.isEmpty, App.shot == nil else { heardFresh = true; return }
+        heardFresh = true
+        heardTimer = Timer.scheduledTimer(withTimeInterval: 6.0, repeats: false) { [weak self] _ in
+            guard let me = self else { return }
+            me.heardFresh = false                                           // fades out over 0.6 s
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { if !me.heardFresh { me.clearHeard() } }
+        }
+    }
+    private func clearHeard() { heard = ""; saveState() }
     @Published private(set) var note = ""
     @Published private(set) var levelDB: Float = -90
     @Published private(set) var folders: [DeviceFolder] = []

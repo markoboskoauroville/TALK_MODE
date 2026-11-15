@@ -67,3 +67,9 @@ Keep the audio of each utterance it sends: ~/Library/Application Support/Talk Mo
 "Space mode, please, when you do space mode, put the red edge, same as on Sony camera, we already have this summary manifest, when Sony camera records, there is a red around it, it means it's doing something special, and this thing is also something special, so put the red, half transparent, soft vignette, but not too soft, same as on Sony. Look at the Sony pictures on the internet and make me the same outline so I understand I'm in space mode."
 
 **Status:** saved first; built in v12.
+
+## 15.11.2026, request 15 (v13): HEARD must not linger
+
+"and there is annoying text happening here in talk mode it says heard mother what's happening again where i am again where are you i don't know what is this this is so stupid"
+
+**Status:** saved first; built in v13.

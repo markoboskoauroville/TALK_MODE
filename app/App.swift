@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 12
+let VERSION = 13
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -380,6 +380,7 @@ struct Root: View {
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("heard")
+                            .opacity(talk.heardFresh ? 1 : 0).animation(.easeOut(duration: 0.6), value: talk.heardFresh)
                     }
                     SendNowButton(talk: talk, size: max(16, big * 0.2))
                     Spacer(minLength: 0)
