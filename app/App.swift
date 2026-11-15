@@ -167,11 +167,12 @@ struct TopRow: View {
     @AppStorage("onTop") private var onTop = false
     @ObservedObject var space = SpaceMode.shared
     var body: some View {
-        ZStack {
+        GeometryReader { tg in ZStack {
+            if tg.size.width >= 520 {          // a narrow window has no room for the title between the words (the window is small, not cut)
             (Text("Talk Mode").fontWeight(.bold) + Text(" (Mantra)").fontWeight(.regular))
-                .font(.system(size: 15)).foregroundStyle(Ink.text)
+                .font(.system(size: 15)).foregroundStyle(Ink.text).frame(width: tg.size.width, height: tg.size.height) }
             HStack(spacing: 10) {
-                Spacer().frame(width: 64)
+                Spacer().frame(width: 4)
                 Text("ON").foregroundStyle(Ink.green)
                 Text("OFF").foregroundStyle(Ink.grey).word("Off, quit Talk Mode", id: "off") { DispatchQueue.main.async { NSApp.terminate(nil) } }
                 Spacer()
@@ -187,7 +188,7 @@ struct TopRow: View {
                     .word("Close window", id: "close") { App.shared.window?.performClose(nil) }
             }
             .font(.system(size: 12, weight: .bold, design: .monospaced))
-        }
+        } }
         .frame(height: 32)
         .onAppear { DispatchQueue.main.async { TopRow.float(onTop) } }
     }
@@ -372,7 +373,8 @@ struct Root: View {
                         .font(.system(size: big, weight: .black, design: .rounded))
                         .foregroundStyle(Ink.of(talk.state))
                         .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .minimumScaleFactor(0.2)
+                        .frame(maxHeight: max(40, g.size.height * 0.5))
                         .accessibilityIdentifier("state")
                     if talk.on && !talk.heard.isEmpty {
                         (Text("HEARD: ").foregroundColor(Ink.dim) + Text("“\(shown(talk.heard))”").foregroundColor(Ink.text))
