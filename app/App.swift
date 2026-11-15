@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 5
+let VERSION = 6
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -38,7 +38,8 @@ enum Ink {
         case .thinking: return violet
         case .speaking: return orange
         case .typing: return grey
-        case .recording, .voiceDown, .noMic: return red
+        case .recording, .voiceDown, .noMic, .manual: return red
+        case .sending: return amber
         case .noTarget: return amber
         }
     }
@@ -206,6 +207,26 @@ struct SessionPicker: View {
     }
 }
 
+/// v6: SEND NOW (the sentence goes now, no waiting for the pause); while a Space take runs it is STOP AND SEND
+struct SendNowButton: View {
+    @ObservedObject var talk: Talk
+    let size: CGFloat
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(talk.manual ? "STOP AND SEND" : "SEND NOW")
+                .font(.system(size: size, weight: .heavy, design: .rounded))
+                .foregroundStyle(talk.manual ? Ink.red : Ink.text)
+                .padding(.horizontal, 18).padding(.vertical, 6)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(talk.manual ? Ink.red : Ink.dim, lineWidth: 1))
+                .fixedSize()
+                .word(talk.manual ? "Stop and send" : "Send now", id: "send-now") { talk.sendNow() }
+            Text(talk.manual ? "SPACE  ·  stop and send" : "SPACE  ·  record, Space again to send")
+                .font(.system(size: max(12, size * 0.45), weight: .semibold, design: .monospaced))
+                .foregroundStyle(Ink.dim).fixedSize()
+        }
+    }
+}
+
 struct Root: View {
     @ObservedObject var talk = Talk.shared
 
@@ -239,6 +260,7 @@ struct Root: View {
                                 .accessibilityIdentifier("heard-via")
                         }
                     }
+                    SendNowButton(talk: talk, size: max(16, big * 0.2))
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 28)
@@ -352,6 +374,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     private var status: NSStatusItem?
     private var activity: NSObjectProtocol?
     private var observer: Any?
+    private var spaceMonitor: Any?
 
     func applicationWillFinishLaunching(_ n: Notification) {
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleURL(_:reply:)),
@@ -386,6 +409,14 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         // listening goes on with the window behind others (no App Nap)
         activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated], reason: "listening for Marko")
         Talk.shared.start()
+        // v6: Space records and sends, only while this window is in front (a local monitor never sees other apps' keys)
+        spaceMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
+            guard e.keyCode == 49, !e.isARepeat,
+                  e.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+                  NSApp.isActive, let w = self?.window, w.isKeyWindow, !(w.firstResponder is NSTextView) else { return e }
+            Talk.shared.spacePressed()
+            return nil
+        }
         observer = Talk.shared.objectWillChange.sink { [weak self] in DispatchQueue.main.async { self?.refreshStatusItem() } }
         Updater.checkAtStart()
     }
@@ -483,6 +514,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         m.addItem(.separator())
         let toggle = NSMenuItem(title: t.on ? "Typing Mode (talk mode off)" : "Talk Mode On", action: #selector(menuToggle), keyEquivalent: "t")
         toggle.keyEquivalentModifierMask = [.control, .option]; toggle.target = self; m.addItem(toggle)
+        let rec = NSMenuItem(title: t.manual ? "Stop and Send" : "Record (Space in the window)", action: #selector(menuSpace), keyEquivalent: "")
+        rec.target = self; m.addItem(rec)
+        let now = NSMenuItem(title: "Send Now", action: #selector(menuSendNow), keyEquivalent: ""); now.target = self; m.addItem(now)
         let again = NSMenuItem(title: "Say the Last Answer Again", action: #selector(menuRepeat), keyEquivalent: ""); again.target = self; m.addItem(again)
         m.addItem(.separator())
         let ses = NSMenuItem(title: "Talk To", action: nil, keyEquivalent: ""), sm = NSMenu()
@@ -516,6 +550,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     }
 
     @objc func menuToggle() { Talk.shared.toggle() }
+    @objc func menuSpace() { Talk.shared.spacePressed() }
+    @objc func menuSendNow() { Talk.shared.sendNow() }
     @objc func menuRepeat() { Talk.shared.repeatLast() }
     @objc func menuShow() { showWindow() }
     @objc func menuSession(_ i: NSMenuItem) {

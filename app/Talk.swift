@@ -5,7 +5,7 @@ import AppKit
 import Foundation
 
 enum TalkState: Equatable {
-    case typing, listening, hearing, writing, thinking, speaking, recording, voiceDown, noMic(String), noTarget
+    case typing, listening, hearing, writing, thinking, speaking, recording, voiceDown, noMic(String), noTarget, manual, sending
 
     var word: String {
         switch self {
@@ -19,6 +19,8 @@ enum TalkState: Equatable {
         case .voiceDown: return "VOICE ENGINE IS DOWN"
         case .noMic: return "NO MICROPHONE"
         case .noTarget: return "NO SESSION"
+        case .manual: return "RECORDING…"
+        case .sending: return "SENDING"
         }
     }
 }
@@ -51,6 +53,12 @@ final class Talk: ObservableObject {
         }
     }
     func earsText(_ code: String) -> String { earsLabel[code] ?? "Voice to Text not answering" }
+
+    /// v6: Space / SEND NOW. `manual` (main) is the push-to-talk take; manualOn/manualBuf/forcedFlag live on the work queue
+    @Published private(set) var manual = false
+    private var manualOn = false
+    private var manualBuf: [Float] = []
+    private var forcedFlag = false
 
     private let ears = Ears()
     private let vad = VAD()
@@ -95,6 +103,16 @@ final class Talk: ObservableObject {
 
     // ------------------------------------------------------------ audio (work queue)
     private func samples(_ s: [Float]) {
+        if manualOn {                                  // Space pressed: everything goes into the take, no detector
+            if Gate.shared.closed { return }
+            manualBuf.append(contentsOf: s)
+            var sum: Float = 0
+            for x in s { sum += x * x }
+            let l = 20 * log10(max(sqrt(sum / Float(max(1, s.count))), 1e-7))
+            let now = Date()
+            if now.timeIntervalSince(lastLevelPush) > 0.1 { lastLevelPush = now; DispatchQueue.main.async { self.levelDB = l } }
+            return
+        }
         let closed = Gate.shared.closed
         if closed {
             if !wasClosed { vad.reset() }              // a half utterance with the voice in it is thrown away
@@ -112,13 +130,17 @@ final class Talk: ObservableObject {
     }
 
     private func utterance(_ s: [Float], _ span: Double) {
+        let forced = forcedFlag
         let talking = DispatchQueue.main.sync { self.on }
-        if !talking && span > 4 { DispatchQueue.main.async { self.voiceEnded() }; return }   // typing mode: only short phrases
-        DispatchQueue.main.async { if self.on { self.state = .writing } }
+        if !talking && !forced && span > 4 { DispatchQueue.main.async { self.voiceEnded() }; return }   // typing mode: only short phrases
+        DispatchQueue.main.async { if forced { self.state = .sending } else if self.on { self.state = .writing } }
         let language = DispatchQueue.main.sync { self.lang }
         hearQ.async {
-            let r = Hearing.hear(s, lang: talking ? language : "en")
-            DispatchQueue.main.async { self.heardVia = r.via; self.handle(r.text, error: r.error); self.refreshEars() }
+            let r = Hearing.hear(s, lang: talking || forced ? language : "en")
+            DispatchQueue.main.async {
+                self.heardVia = r.via; self.handle(r.text, error: r.error, forced: forced); self.refreshEars()
+                if self.state == .sending { self.state = self.on ? .listening : .typing }
+            }
         }
     }
 
@@ -126,7 +148,7 @@ final class Talk: ObservableObject {
     private func voiceStarted() { if on, state == .listening { state = .hearing } }
     private func voiceEnded() { if on, state == .hearing { state = .listening } }
 
-    private func handle(_ text: String?, error: String?) {
+    private func handle(_ text: String?, error: String?, forced: Bool = false) {
         guard let text else {
             if on { note = error ?? ""; state = .listening }
             if error != nil { Voice.startIfDown() }
@@ -147,8 +169,8 @@ final class Talk: ObservableObject {
             return
         default: break
         }
-        guard on else { return }
-        if Phrase.isNoise(text) { state = .listening; return }
+        guard on || forced else { return }
+        if Phrase.isNoise(text) { state = on ? .listening : .typing; return }
         send(text)
     }
 
@@ -173,6 +195,8 @@ final class Talk: ObservableObject {
 
     /// the state follows the voice and the gate, 7 times a second
     private func update() {
+        if manual { if state != .manual { state = .manual; saveState() }; return }
+        if state == .sending { return }
         levelDB = Gate.shared.closed ? -90 : levelDB
         if !Gate.shared.reachable { Voice.startIfDown() }
         guard on else { if state != .typing { state = .typing; saveState() }; return }
@@ -201,12 +225,45 @@ final class Talk: ObservableObject {
 
     func toggle() { setOn(!on) }
 
+    // ------------------------------------------------------------ v6: Space and SEND NOW (Marko, 15.11.2026: "build button to
+    // send transcription now without waiting shortcut key if app is in focus is space for both star recording and transcribe")
+    /// Space: the first press starts a take (the voice stops if it talks: he has the floor), the second sends it
+    func spacePressed() { manual ? sendNow() : startManual() }
+
+    func startManual() {
+        manual = true; state = .manual; note = ""
+        if Gate.shared.speaking { Voice.stop() }
+        work.async { self.vad.reset(); self.manualBuf = []; self.manualOn = true }
+        saveState()
+    }
+
+    /// SEND NOW: the take (Space) or the sentence being heard (the detector) is written down and sent at once
+    func sendNow() {
+        if manual {
+            manual = false; state = .sending; saveState()
+            work.async {
+                self.manualOn = false
+                let s = self.manualBuf; self.manualBuf = []
+                self.vad.reset()
+                if Double(s.count) / Ears.rate < 0.3 {
+                    DispatchQueue.main.async { self.note = "nothing was recorded"; self.state = self.on ? .listening : .typing }
+                    return
+                }
+                self.forcedFlag = true; self.utterance(s, Double(s.count) / Ears.rate); self.forcedFlag = false
+            }
+        } else {
+            work.async { self.forcedFlag = true; self.vad.forceEnd(); self.forcedFlag = false }
+        }
+    }
+
     /// --preview <state>: the window filled with examples, nothing listens, nothing is sent (screenshots only)
     func preview(_ what: String) {
         on = what != "typing"
         let all: [String: TalkState] = ["listening": .listening, "hearing": .hearing, "writing": .writing, "thinking": .thinking,
-                                        "speaking": .speaking, "typing": .typing, "recording": .recording, "down": .voiceDown]
+                                        "speaking": .speaking, "typing": .typing, "recording": .recording, "down": .voiceDown,
+                                        "manual": .manual, "sending": .sending]
         state = all[what] ?? .listening
+        manual = what == "manual"
         heard = ["thinking", "speaking", "writing"].contains(what)
             ? "Please check the render of the second version and tell me when the upload to Drive is finished." : ""
         let mac = [Target(kind: .mac, device: "MacBook Pro", key: "p1", name: "mac23_15-11_(real talk mode)", detail: "claude-code · busy",

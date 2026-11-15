@@ -48,6 +48,7 @@ enum Voice {
     }
 
     static func say(_ text: String) { DispatchQueue.global().async { _ = post("/speak", ["text": text]) } }
+    static func stop() { DispatchQueue.global().async { _ = post("/speak/stop") } }
     static func replay() { DispatchQueue.global().async { _ = post("/speak/replay") } }
     static func seen() { _ = post("/speak/seen") }
 

@@ -196,13 +196,16 @@ final class VAD {
         if Double(silent) * secs >= pause || Double(framesIn) * secs >= maxLength { finish(secs) }
     }
 
-    private func finish(_ secs: Double) {
+    /// SEND NOW (v6): the utterance ends here, without waiting for the pause; anything over 0.2 s of voice counts
+    func forceEnd() { if inUtt { finish(Double(frame) / Ears.rate, forced: true) } }
+
+    private func finish(_ secs: Double, forced: Bool = false) {
         inUtt = false
         let span = Double(lastVoice - min(lastVoice, 10)) * secs     // from the voice start (after the pre-roll) to the last voice
         let keep = min(utt.count, (lastVoice + 10) * frame)          // 300 ms of silence after the last voice
         let samples = Array(utt.prefix(keep))
         utt = []; pre = []; startRun = 0
-        if span >= minLength { onUtterance?(samples, span) } else { onNoise?(span) }
+        if span >= (forced ? 0.2 : minLength) { onUtterance?(samples, span) } else { onNoise?(span) }
     }
 }
 
