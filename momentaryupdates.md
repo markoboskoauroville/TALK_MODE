@@ -17,3 +17,7 @@ Marko, 15.11.2026, word for word:
 > Please now update how good is each engine and how fast is each engine in the engine name everywhere.
 
 **Status:** saved first. Voice to Text v24 keeps per-engine median time (last 20 takes, per language) and a quality score (WER against a reference phrase in TEST mode, or Marko's rating) and shows "Deepgram · 1.0 s · ★★★★☆" wherever an engine name appears; Talk Mode v5 reads it from /engines.
+
+## 15.11.2026, request 4 (v5)
+
+"build button to send transcription now without waiting shortcut key if app is in focus is space for both star recording and transcribe"
