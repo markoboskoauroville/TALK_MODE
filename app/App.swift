@@ -358,7 +358,7 @@ struct Root: View {
         VStack(spacing: 0) {
             TopRow(); Hairline()
             GeometryReader { g in
-                let big = max(40, min(g.size.width / 7.5, g.size.height / 3.4, 170))
+                let big = max(20, min(g.size.width / 7.5, g.size.height / 3.4, 170))
                 VStack(spacing: big * 0.22) {
                     Spacer(minLength: 0)
                     if space.on || talk.spacePreview {
@@ -382,15 +382,15 @@ struct Root: View {
                             .accessibilityIdentifier("heard")
                             .opacity(talk.heardFresh ? 1 : 0).animation(.easeOut(duration: 0.6), value: talk.heardFresh)
                     }
-                    SendNowButton(talk: talk, size: max(16, big * 0.2))
+                    SendNowButton(talk: talk, size: max(12, big * 0.2))
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 28)
+                .padding(.horizontal, g.size.width < 500 ? 10 : 28)
                 .frame(width: g.size.width, height: g.size.height)
                 .opacity(talk.enginesOpen ? 0 : 1)
                 .overlay { if talk.enginesOpen { EnginePanel(talk: talk, size: max(17, big * 0.17)).frame(width: g.size.width, height: g.size.height) } }
             }
-            .frame(minHeight: 220, maxHeight: .infinity)
+            .frame(minHeight: 150, maxHeight: .infinity)
             Hairline()
             steps.padding(.horizontal, 18).padding(.vertical, 12)
         }
@@ -450,26 +450,12 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         mainMenu()
         if App.shot == nil { makeStatusItem() }
         makeWindow()
-        watchScreens()
         if let i = CommandLine.arguments.firstIndex(of: "--preview") {      // the window alone, for a screenshot: no ears, no sessions
             let a = CommandLine.arguments
             Talk.shared.preview(i + 1 < a.count ? a[i + 1] : "listening")
             if let j = a.firstIndex(of: "--size"), j + 1 < a.count {
                 let p = a[j + 1].split(separator: "x").compactMap { Double($0) }
                 if p.count == 2 { window?.setContentSize(NSSize(width: p[0], height: p[1])) }
-            }
-            // --visible WxH: a simulated screen (its visible area); the window is fitted by the same rule as on a real screen change
-            if let j = a.firstIndex(of: "--visible"), j + 1 < a.count, let w = window {
-                let p = a[j + 1].split(separator: "x").compactMap { Double($0) }
-                if p.count == 2 {
-                    let vis = NSRect(x: 0, y: 0, width: p[0], height: p[1])
-                    let m = NSSize(width: min(WindowFit.wishedMin.width, vis.width), height: min(WindowFit.wishedMin.height, vis.height))
-                    w.contentMinSize = m
-                    let before = w.frame
-                    let n = WindowFit.fit(NSRect(origin: .zero, size: before.size), in: vis, minSize: m)
-                    w.setContentSize(n.size)
-                    print("fit: window \(Int(before.width))x\(Int(before.height)) on a screen of \(Int(vis.width))x\(Int(vis.height)) -> \(Int(n.width))x\(Int(n.height)) at \(Int(n.minX)),\(Int(n.minY)), inside: \(vis.contains(n))")
-                }
             }
             if let path = App.shot {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -525,7 +511,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
 
     func makeWindow() {
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
-                         styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                         styleMask: [.titled, .closable, .miniaturizable, .resizable],
                          backing: .buffered, defer: false)
         w.title = APP_NAME
         w.titleVisibility = .hidden
@@ -535,16 +521,18 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         w.isReleasedWhenClosed = false
         w.isRestorable = false
         w.backgroundColor = NSColor(red: 0.043, green: 0.043, blue: 0.051, alpha: 1)
-        w.contentMinSize = NSSize(width: 720, height: 500)
-        w.contentView = NSHostingView(rootView: Root())
+        w.contentMinSize = NSSize(width: 360, height: 240)
+        let host = NSHostingView(rootView: Root())
+        host.sizingOptions = []            // v13: the content never dictates the window's size or minimum (it jumped and would not shrink)
+        w.contentView = host
         w.delegate = self
         window = w
         enforceOneTitle(w)
         if App.shot != nil {                       // --shot: drawn off every screen, nothing comes to the front
             w.setFrameOrigin(NSPoint(x: -20000, y: -20000)); w.orderFront(nil)
         } else {
-            w.center()
-            WindowFit.apply(w, useRemembered: true)      // v12: back where it was on this screen setup, always fully on screen
+            if !w.setFrameUsingName("TalkModeMain13") { w.center() }       // v13: a standard window: AppKit's own autosave and constrainFrameRect
+            w.setFrameAutosaveName("TalkModeMain13")
             w.makeKeyAndOrderFront(nil)
         }
         DispatchQueue.main.async { self.enforceOneTitle(w) }
@@ -572,39 +560,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     }
     func windowDidBecomeKey(_ n: Notification) { enforceOneTitle() }
     func windowDidResignKey(_ n: Notification) { enforceOneTitle() }
-    func windowDidResize(_ n: Notification) { enforceOneTitle(); scheduleFit() }
-    func windowDidMove(_ n: Notification) { scheduleFit() }
-    func windowDidChangeScreen(_ n: Notification) { scheduleFit() }
-    func windowDidEndLiveResize(_ n: Notification) { fitNow() }
-
-    // v12: nothing goes out of the display. After every move/resize, screen change, wake and launch.
-    private var fitTimer: Timer?
-    private var lastSetup = ""
-    func scheduleFit() {
-        guard App.shot == nil else { return }
-        fitTimer?.invalidate()
-        fitTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in self?.fitNow() }
-    }
-    func fitNow() {
-        guard App.shot == nil, let w = window else { return }
-        WindowFit.apply(w)
-        if !w.styleMask.contains(.fullScreen) { WindowFit.remember(w.frame) }
-    }
-    func screensChanged() {
-        guard App.shot == nil, let w = window else { return }
-        let sig = WindowFit.currentSignature
-        let changed = sig != lastSetup; lastSetup = sig
-        WindowFit.apply(w, useRemembered: changed)       // a known setup gets its remembered place; a new one is fitted
-        if !w.styleMask.contains(.fullScreen) { WindowFit.remember(w.frame) }
-    }
-    func watchScreens() {
-        lastSetup = WindowFit.currentSignature
-        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            // macOS sends it while the screens are still settling: once at once, once after they have
-            self?.screensChanged(); DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { self?.screensChanged() } }
-        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { self?.screensChanged() } }
-    }
+    func windowDidResize(_ n: Notification) { enforceOneTitle() }
+    func windowDidEndLiveResize(_ n: Notification) { enforceOneTitle() }
     func windowDidEnterFullScreen(_ n: Notification) { enforceOneTitle() }
     func windowDidExitFullScreen(_ n: Notification) { enforceOneTitle() }
 

@@ -31,3 +31,7 @@
   side: RECORDING… is his take in Talk Mode, "VOX IS RECORDING — I WAIT" is another recorder holding the microphone.
 - 15.11.2026 (v12): setFrameAutosaveName restores a frame that no longer fits a different monitor; the frame is now stored per
   screen configuration and always passed through WindowFit (shrink, then move inside) after every move, screen change and wake.
+- 15.11.2026 (v13): custom window code (v12 WindowFit: fit after every move, remembered frames) made it worse: Marko could not
+  shrink it and it jumped. Standard NSWindow + frame autosave + AppKit's constrainFrameRect, nothing invented. NSHostingView's
+  default sizingOptions also set the window's minimum from the content: sizingOptions = [] keeps it a normal resizable window.
+- 15.11.2026 (v13): HEARD cleared 6 s after sending (fade), so an old mis-heard sentence never stays.

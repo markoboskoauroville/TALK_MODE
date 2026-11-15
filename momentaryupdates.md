@@ -73,3 +73,9 @@ Keep the audio of each utterance it sends: ~/Library/Application Support/Talk Mo
 "and there is annoying text happening here in talk mode it says heard mother what's happening again where i am again where are you i don't know what is this this is so stupid"
 
 **Status:** saved first; built in v13.
+
+## 15.11.2026, request 16 (v13): a normal window
+
+"This app has another annoying feature. It snaps to the top of the window, always. I cannot resize it. I want to make it small, it always jumps to the top. What is this? Please make it normal window. Edges are resizing it in all axis."
+
+**Status:** saved first; built in v13.
