@@ -11,3 +11,9 @@
 ## 15.11.2026, request 3 (v4)
 
 "And of course the session are ordered by activity. So last active session is at the top"
+
+## 15.11.2026: how good and how fast each engine is, in the engine name (via the master session)
+Marko, 15.11.2026, word for word:
+> Please now update how good is each engine and how fast is each engine in the engine name everywhere.
+
+**Status:** saved first. Voice to Text v24 keeps per-engine median time (last 20 takes, per language) and a quality score (WER against a reference phrase in TEST mode, or Marko's rating) and shows "Deepgram · 1.0 s · ★★★★☆" wherever an engine name appears; Talk Mode v5 reads it from /engines.
