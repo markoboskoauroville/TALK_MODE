@@ -241,3 +241,100 @@ enum Hearing {
         return out
     }
 }
+
+/// v8: one engine of Voice to Text, as the ENGINES panel shows it (Marko, 15.11.2026: "luxurious changing of engines ...
+/// remote control for our VOX application ... the stars ratings, timing and everything, and the credits")
+struct EngineRow: Identifiable, Hashable {
+    let id: String
+    let label: String          // "Deepgram · 0.9 s · ★★★★☆" for the language
+    let short: String          // the name alone
+    let stars: Int             // 0...5
+    let quality: Int?          // percent
+    let secs: Double?          // median time of a take
+    let available: Bool
+    let selected: Bool         // the engine of this language now
+    let credit: String         // what is known of its credit, in words
+    let route: String          // "Frankfurt" or "this Mac"
+}
+
+extension Hearing {
+    static func json(_ path: String, method: String = "GET", body: [String: Any]? = nil) -> [String: Any]? {
+        guard let url = URL(string: api + path) else { return nil }
+        var r = URLRequest(url: url, timeoutInterval: 5)
+        r.httpMethod = method
+        if let body { r.httpBody = try? JSONSerialization.data(withJSONObject: body); r.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        let sem = DispatchSemaphore(value: 0)
+        var j: [String: Any]?
+        URLSession.shared.dataTask(with: r) { d, _, _ in
+            if let d { j = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] }
+            sem.signal()
+        }.resume()
+        _ = sem.wait(timeout: .now() + 6)
+        return j
+    }
+
+    static func hours(_ s: Int) -> String {
+        if s >= 3600 { let h = Double(s) / 3600; return h >= 10 ? "\(Int(h.rounded())) h" : String(format: "%.1f h", h) }
+        return "\(max(0, s / 60)) min"
+    }
+
+    static func creditText(_ c: [String: Any], local: Bool, paid: Bool) -> String {
+        if local { return "this Mac · free" }
+        var parts: [String] = []
+        let reset = c["reset"] as? String ?? ""
+        if paid { parts.append(String(format: "paid · $%.2f an hour", c["price_per_hour"] as? Double ?? 0)) }
+        else if let left = c["left_seconds"] as? Int, let free = c["free_seconds"] as? Int {
+            switch reset {
+            case "oneOff": parts.append("trial credit · \(hours(left)) left of \(hours(free))")
+            case "daily": parts.append("free \(hours(free)) a day · \(hours(left)) left today")
+            case "monthly": parts.append("free \(hours(free)) a month · \(hours(left)) left")
+            case "hourly": parts.append("free \(hours(free)) an hour · \(hours(left)) left")
+            default: parts.append("free · \(hours(left)) left")
+            }
+        }
+        if let k = c["keys"] as? Int { parts.append(k == 1 ? "1 key" : "\(k) keys") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// every engine for the language, from Voice to Text v26+ (older: without credit)
+    static func engines(lang: String) -> [EngineRow]? {
+        guard let list = json("/engines")?["engines"] as? [[String: Any]] else { return nil }
+        let chosen = UserDefaults(suiteName: "com.mantra.voicetotext")?.string(forKey: "engine_" + lang)
+        return list.compactMap { e in
+            guard let id = e["id"] as? String else { return nil }
+            let st = e["stats_" + lang] as? [String: Any] ?? [:]
+            let label = (lang == "hr" ? e["label_hr"] : e["label"]) as? String ?? id
+            let starText = st["stars"] as? String ?? ""
+            let local = e["local"] as? Bool ?? false, paid = e["paid"] as? Bool ?? false
+            let c = e["credit"] as? [String: Any] ?? [:]
+            let sel = (e["selected_" + lang] as? Bool) ?? (chosen == id)
+            return EngineRow(id: id, label: label, short: label.components(separatedBy: " · ").first ?? label,
+                             stars: starText.filter { $0 == "★" }.count, quality: st["quality_pct"] as? Int,
+                             secs: (st["median_secs"] as? Double) ?? (st["median_secs"] as? Int).map(Double.init),
+                             available: e["available"] as? Bool ?? true, selected: sel,
+                             credit: creditText(c, local: local, paid: paid),
+                             route: local ? "this Mac" : ((c["frankfurt"] as? Bool) == true ? "Frankfurt" : "direct"))
+        }
+    }
+
+    /// makes it the engine of that language in Voice to Text (POST /engines/select, v26+)
+    static func select(_ id: String, lang: String) -> (Bool, String) {
+        guard let j = json("/engines/select", method: "POST", body: ["id": id, "lang": lang]) else { return (false, "Voice to Text does not answer") }
+        if (j["ok"] as? Bool) == true { return (true, j["label"] as? String ?? id) }
+        return (false, j["error"] as? String ?? "Voice to Text v26 or newer is needed")
+    }
+
+    /// BEST: stars first, then the faster; STARS: quality; TIME: the fastest first (no data last)
+    static func sorted(_ rows: [EngineRow], by: String) -> [EngineRow] {
+        func t(_ r: EngineRow) -> Double { r.secs ?? 999 }
+        func q(_ r: EngineRow) -> Int { r.quality ?? -1 }
+        let a = rows.filter(\.available), b = rows.filter { !$0.available }
+        let s: [EngineRow]
+        switch by {
+        case "stars": s = a.sorted { q($0) != q($1) ? q($0) > q($1) : t($0) < t($1) }
+        case "time": s = a.sorted { t($0) != t($1) ? t($0) < t($1) : q($0) > q($1) }
+        default: s = a.sorted { $0.stars != $1.stars ? $0.stars > $1.stars : t($0) != t($1) ? t($0) < t($1) : q($0) > q($1) }
+        }
+        return s + b
+    }
+}

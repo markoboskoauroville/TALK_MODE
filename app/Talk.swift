@@ -231,6 +231,55 @@ final class Talk: ObservableObject {
 
     func toggle() { setOn(!on) }
 
+    // ------------------------------------------------------------ v8: the ENGINES panel (remote control of Voice to Text)
+    @Published private(set) var enginesOpen = false
+    @Published private(set) var engines: [EngineRow] = []
+    @Published var engineSort: String = UserDefaults.standard.string(forKey: "engineSort") ?? "best" {
+        didSet { UserDefaults.standard.set(engineSort, forKey: "engineSort"); engines = Hearing.sorted(engines, by: engineSort) }
+    }
+    @Published var engineCursor = 0
+    @Published private(set) var engineNote = ""
+
+    func openEngines() { enginesOpen = true; engineNote = "reading Voice to Text…"; loadEngines(moveCursor: true) }
+    func closeEngines() { enginesOpen = false }
+
+    func loadEngines(moveCursor: Bool = false) {
+        let l = lang, by = engineSort
+        DispatchQueue.global().async {
+            let rows = Hearing.engines(lang: l).map { Hearing.sorted($0, by: by) }
+            DispatchQueue.main.async {
+                guard let rows else { self.engineNote = "Voice to Text (Mantra) does not answer on 127.0.0.1:8865"; self.engines = []; return }
+                self.engines = rows
+                self.engineNote = ""
+                if moveCursor { self.engineCursor = rows.firstIndex(where: \.selected) ?? 0 }
+            }
+        }
+    }
+
+    func pickEngine(_ id: String) {
+        let l = lang
+        engineNote = "switching…"
+        DispatchQueue.global().async {
+            let (ok, what) = Hearing.select(id, lang: l)
+            DispatchQueue.main.async {
+                self.engineNote = ok ? "\(l.uppercased()) now: \(what)" : what
+                self.loadEngines()
+                self.refreshEars()
+            }
+        }
+    }
+
+    func moveEngineCursor(_ d: Int) {
+        guard !engines.isEmpty else { return }
+        engineCursor = max(0, min(engines.count - 1, engineCursor + d))
+    }
+
+    func pickAtCursor() {
+        guard engines.indices.contains(engineCursor) else { return }
+        let r = engines[engineCursor]
+        if r.available { pickEngine(r.id) } else { engineNote = "\(r.short) has no key on this Mac" }
+    }
+
     // ------------------------------------------------------------ v6: Space and SEND NOW (Marko, 15.11.2026: "build button to
     // send transcription now without waiting shortcut key if app is in focus is space for both star recording and transcribe")
     /// Space: the first press starts a take (the voice stops if it talks: he has the floor), the second sends it
@@ -270,6 +319,19 @@ final class Talk: ObservableObject {
                                         "manual": .manual, "sending": .sending]
         state = all[what] ?? .listening
         manual = what == "manual"
+        if what == "engines" {
+            enginesOpen = true
+            engines = Hearing.sorted([
+                EngineRow(id: "deepgram", label: "", short: "Deepgram", stars: 4, quality: 88, secs: 0.9, available: true, selected: true,
+                          credit: "trial credit · 638 h left of 639 h · 3 keys", route: "Frankfurt"),
+                EngineRow(id: "parakeet", label: "", short: "Parakeet", stars: 3, quality: 69, secs: 0.4, available: true, selected: false,
+                          credit: "this Mac · free", route: "this Mac"),
+                EngineRow(id: "groq_turbo", label: "", short: "Groq turbo", stars: 4, quality: 86, secs: nil, available: true, selected: false,
+                          credit: "free 8.0 h a day · 7.9 h left today · 8 keys", route: "Frankfurt"),
+                EngineRow(id: "soniox", label: "", short: "Soniox", stars: 0, quality: nil, secs: nil, available: false, selected: false,
+                          credit: "paid · $0.10 an hour", route: "Frankfurt")], by: engineSort)
+            engineCursor = 0
+        }
         heard = ["thinking", "speaking", "writing"].contains(what)
             ? "Please check the render of the second version and tell me when the upload to Drive is finished." : ""
         let mac = [Target(kind: .mac, device: "MacBook Pro", key: "p1", name: "mac23_15-11_(real talk mode)", detail: "claude-code · busy",

@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 7
+let VERSION = 8
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -227,6 +227,83 @@ struct SendNowButton: View {
     }
 }
 
+/// v8: the ENGINES panel: every engine of Voice to Text for the language, big enough for the camera; a click (or ↑ ↓ and
+/// Return while the window is in front) makes it the engine of Voice to Text for that language. Esc closes.
+struct EnginePanel: View {
+    @ObservedObject var talk: Talk
+    let size: CGFloat
+
+    func sortWord(_ key: String, _ word: String) -> some View {
+        Text(word).foregroundStyle(talk.engineSort == key ? Ink.green : Ink.grey)
+            .word("Sort by \(word.lowercased())", id: "sort-\(key)", value: talk.engineSort == key ? "on" : "off") { talk.engineSort = key }
+    }
+
+    func row(_ r: EngineRow, _ i: Int) -> some View {
+        let here = i == talk.engineCursor
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 12) {
+                Text(r.selected ? "●" : "○").foregroundStyle(r.selected ? Ink.green : Ink.dim)
+                Text(r.short).fontWeight(.heavy).foregroundStyle(r.available ? Ink.text : Ink.grey)
+                Text(r.secs.map { String(format: "%.1f s", $0) } ?? "no time yet").foregroundStyle(Ink.dim)
+                Text(String(repeating: "★", count: r.stars) + String(repeating: "☆", count: max(0, 5 - r.stars)))
+                    .foregroundStyle(Ink.amber)
+                if let q = r.quality { Text("\(q) %").foregroundStyle(Ink.dim) }
+            }
+            .font(.system(size: size, weight: .semibold, design: .rounded))
+            Text((r.available ? r.credit : "no key or not installed on this Mac") + "  ·  " + r.route)
+                .font(.system(size: max(12, size * 0.55), weight: .medium, design: .monospaced))
+                .foregroundStyle(Ink.dim)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, size * 1.2)
+        }
+        .padding(.vertical, 6).padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(r.selected ? Ink.green.opacity(0.12) : Color.clear))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(here ? Ink.text.opacity(0.6) : Color.clear, lineWidth: 1))
+        .contentShape(Rectangle())
+        .onTapGesture { talk.engineCursor = i; if r.available { talk.pickEngine(r.id) } }
+        .axButton("\(r.short), \(r.selected ? "in use" : "not in use")", id: "engine-\(r.id)", value: r.credit) {
+            if r.available { talk.pickEngine(r.id) } }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 14) {
+                Text("ENGINES · " + (talk.lang == "hr" ? "CROATIAN" : "ENGLISH"))
+                    .font(.system(size: size * 1.2, weight: .black, design: .rounded)).fixedSize()
+                Spacer(minLength: 8)
+                HStack(spacing: 6) {
+                    sortWord("best", "BEST"); Text("|").foregroundStyle(Ink.dim)
+                    sortWord("stars", "STARS"); Text("|").foregroundStyle(Ink.dim)
+                    sortWord("time", "TIME")
+                }
+                .font(.system(size: max(13, size * 0.6), weight: .bold, design: .monospaced)).fixedSize()
+                Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Ink.grey)
+                    .frame(width: 24, height: 24).word("Close the engines", id: "engines-close") { talk.closeEngines() }
+            }
+            if !talk.engineNote.isEmpty {
+                Text(talk.engineNote).font(.system(size: max(13, size * 0.6))).foregroundStyle(Ink.amber)
+            }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 4) {
+                        ForEach(Array(talk.engines.enumerated()), id: \.element.id) { (i: Int, r: EngineRow) in
+                            row(r, i).id(r.id)
+                        }
+                    }
+                }
+                .onChange(of: talk.engineCursor) { c in
+                    if talk.engines.indices.contains(c) { withAnimation { proxy.scrollTo(talk.engines[c].id) } }
+                }
+            }
+            Text("↑ ↓ choose  ·  RETURN use it  ·  ESC close  ·  credit from this Mac's own records")
+                .font(.system(size: max(11, size * 0.5), weight: .medium, design: .monospaced)).foregroundStyle(Ink.dim)
+        }
+        .padding(.horizontal, 22).padding(.vertical, 12)
+        .background(Ink.ground)
+    }
+}
+
 struct Root: View {
     @ObservedObject var talk = Talk.shared
 
@@ -272,6 +349,8 @@ struct Root: View {
                 }
                 .padding(.horizontal, 28)
                 .frame(width: g.size.width, height: g.size.height)
+                .opacity(talk.enginesOpen ? 0 : 1)
+                .overlay { if talk.enginesOpen { EnginePanel(talk: talk, size: max(17, big * 0.17)).frame(width: g.size.width, height: g.size.height) } }
             }
             .frame(minHeight: 220)
             Hairline()
@@ -328,8 +407,13 @@ struct Root: View {
                     }
                 }
                 Cell(label: "EARS · TIME · QUALITY") {
-                    Text(talk.earsText(talk.lang)).fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("ears")
+                    HStack(spacing: 10) {
+                        Text(talk.earsText(talk.lang)).fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("ears")
+                        Text(talk.enginesOpen ? "CLOSE" : "CHANGE").foregroundStyle(Ink.amber).fixedSize()
+                            .word(talk.enginesOpen ? "Close the engines" : "Change the engine", id: "engines") {
+                                talk.enginesOpen ? talk.closeEngines() : talk.openEngines() }
+                    }
                 }
                 Cell(label: "PAUSE THAT ENDS A SENTENCE") {
                     HStack(spacing: 6) {
@@ -410,6 +494,16 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         Talk.shared.start()
         // v6: Space records and sends, only while this window is in front (a local monitor never sees other apps' keys)
         spaceMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
+            if Talk.shared.enginesOpen, NSApp.isActive, self?.window?.isKeyWindow == true,
+               e.modifierFlags.intersection([.command, .control, .option]).isEmpty {
+                switch e.keyCode {
+                case 126: Talk.shared.moveEngineCursor(-1); return nil      // ↑
+                case 125: Talk.shared.moveEngineCursor(1); return nil       // ↓
+                case 36, 76: Talk.shared.pickAtCursor(); return nil          // Return
+                case 53: Talk.shared.closeEngines(); return nil              // Esc
+                default: break
+                }
+            }
             guard e.keyCode == 49, !e.isARepeat,
                   e.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
                   NSApp.isActive, let w = self?.window, w.isKeyWindow, !(w.firstResponder is NSTextView) else { return e }
@@ -517,6 +611,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         rec.target = self; m.addItem(rec)
         let mode = NSMenuItem(title: t.auto ? "Mode: Auto (switch to Manual)" : "Mode: Manual (switch to Auto)", action: #selector(menuMode), keyEquivalent: "")
         mode.target = self; m.addItem(mode)
+        let eng = NSMenuItem(title: "Engines… (Voice to Text)", action: #selector(menuEngines), keyEquivalent: ""); eng.target = self; m.addItem(eng)
         let now = NSMenuItem(title: "Send Now", action: #selector(menuSendNow), keyEquivalent: ""); now.target = self; m.addItem(now)
         let again = NSMenuItem(title: "Say the Last Answer Again", action: #selector(menuRepeat), keyEquivalent: ""); again.target = self; m.addItem(again)
         m.addItem(.separator())
@@ -554,6 +649,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     @objc func menuSpace() { Talk.shared.spacePressed() }
     @objc func menuSendNow() { Talk.shared.sendNow() }
     @objc func menuMode() { Talk.shared.auto.toggle() }
+    @objc func menuEngines() { showWindow(); Talk.shared.openEngines() }
     @objc func menuRepeat() { Talk.shared.repeatLast() }
     @objc func menuShow() { showWindow() }
     @objc func menuSession(_ i: NSMenuItem) {
