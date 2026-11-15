@@ -87,3 +87,7 @@ While Marko was away, AUTO sent "I'm going to go to the bathroom." (twice), "I'm
 ## 15.11.2026, request 18 (v14): sound-tag transcripts (from the coordinator)
 
 The noise guard let through sound descriptions: Marko's whistling arrived twice as "**whistling**" and "**whistles**"; also seen "kuf kuf kuf", "oooohhhhhh", "Sigh...". Drop any utterance that is only a sound description: wrapped in *...*, **...**, [...], (...), music-note signs, or a single interjection/onomatopoeia (sigh, cough, whistle/whistling/whistles, laugh/laughs, music, applause, hmm, oh+, ah+, kuf, repeated syllables). Same "ignored (noise)" note and ignored.log.
+
+## 15.11.2026, request 19 (v15): Space Mode exits with Esc Esc, Esc cancels a take
+
+"We need to improve the space mode. First of all, when I am in space mode, to exit the space mode I press 2 times ESC. There is no timing anymore, 2 times ESC. If I am pressing space dictating, I press once ESC, it cancels dictation. Please update this."
