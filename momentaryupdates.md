@@ -41,3 +41,17 @@ Keep the audio of each utterance it sends: ~/Library/Application Support/Talk Mo
 ## 15.11.2026, request 9 (v10)
 
 "please use archive the same we are using on my phones. It's AAC tiny files. That's it. You never store the original WAV. So the same principle apply here. If it's not, I don't know. Record in full quality, 48 kHz, 24 bits, and then you need to compress it to tiny WAV file and convert it to AAC for even tinier file."
+
+## 15.11.2026, request 10 (v11): macOS switches everywhere, and SPACE MODE
+
+"It is working. Talk mode. We need to update more app. ... I ask for a switch, typical switch in the Mac OS. A switch, a button, round button, looks like ellipse and inside is a small circle. So I want to have this kind of switch. I like these switches, I want to see them everywhere. and another switch will be which doesn't exist at the moment and that switch is space mode in parenthesis it means that basically my keyboard and mouse outputs are disabled completely you can also put this banner that is disabled and I press space and you do all the actions We are just interacting to the voice. So I can space reacts wherever is the focus. It triggers the recording and you are answering to me."
+
+## 15.11.2026, request 11 (v11)
+
+"Yes, that is correct, but you need to also put this blocking banner you are using when macro is running, so I can also press and take over. And I can also in voice tell you, okay, go out of this mode. You will understand how to get out of the space mode."
+
+## 15.11.2026, request 12 (v11)
+
+"in our app talk mode These are unnecessary parts, language, ears. I don't need these things. Because language is in my transcription blob. I can adjust everything and this is what is the default."
+
+**Status:** saved first; built in v11.
