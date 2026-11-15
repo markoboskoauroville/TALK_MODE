@@ -7,20 +7,40 @@ import Foundation
 enum TalkState: Equatable {
     case typing, listening, hearing, writing, thinking, speaking, recording, voiceDown, noMic(String), noTarget, manual, sending
 
+    /// v12 (Marko, 15.11.2026: "it says paused recording. What is paused?"): every word says, from Marko's side, what is
+    /// happening right now. PAUSED is gone; Talk Mode's own recording is RECORDING…, another recorder's is named.
     var word: String {
         switch self {
-        case .typing: return "TYPING MODE"
+        case .typing: return "TALK MODE IS OFF"
         case .listening: return "LISTENING"
-        case .hearing: return "HEARING YOU"
+        case .hearing: return "I HEAR YOU"
         case .writing: return "WRITING IT DOWN"
         case .thinking: return "CLAUDE IS THINKING"
-        case .speaking: return "SPEAKING"
-        case .recording: return "PAUSED · RECORDING"
+        case .speaking: return "CLAUDE IS SPEAKING"
+        case .recording: return "VOX IS RECORDING — I WAIT"
         case .voiceDown: return "VOICE ENGINE IS DOWN"
         case .noMic: return "NO MICROPHONE"
-        case .noTarget: return "NO SESSION"
+        case .noTarget: return "NO SESSION CHOSEN"
         case .manual: return "RECORDING…"
         case .sending: return "SENDING"
+        }
+    }
+
+    /// the same state as one plain sentence (state.json `plain`, Queen's "talk mode status")
+    var plain: String {
+        switch self {
+        case .typing: return "Talk Mode is off: I only listen for the words that switch it on, nothing is sent."
+        case .listening: return "I am listening; say something, I send it after your pause."
+        case .hearing: return "I hear you speaking right now."
+        case .writing: return "You finished a sentence; I am turning it into text."
+        case .thinking: return "Your words are in the Claude Code session; Claude is working on the answer."
+        case .speaking: return "Claude is speaking the answer; I do not listen until it is finished."
+        case .recording: return "Voice to Text (Vox) is recording; I do not listen until it stops, then I listen again."
+        case .voiceDown: return "The voice engine (MANTRA_VOICE) does not answer; I am trying to start it."
+        case .noMic: return "I have no microphone to listen with."
+        case .noTarget: return "No Claude Code session is chosen; pick one in step 1."
+        case .manual: return "You are recording with Talk Mode; press Space or STOP AND SEND to send it."
+        case .sending: return "I am sending your recording to the session."
         }
     }
 }
@@ -432,7 +452,7 @@ final class Talk: ObservableObject {
     }
 
     func saveState() {
-        let j: [String: Any] = ["on": on, "state": state.word, "target": target?.name ?? "", "target_device": target?.device ?? "", "target_id": target?.id ?? "", "heard_via": heardVia,
+        let j: [String: Any] = ["on": on, "state": state.word, "plain": state.plain, "target": target?.name ?? "", "target_device": target?.device ?? "", "target_id": target?.id ?? "", "heard_via": heardVia,
                                 "mic": device?.name ?? "", "lang": lang, "space_mode": SpaceMode.shared.on, "last_take": lastTake, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
                                 "time": ISO8601DateFormatter().string(from: Date())]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted]) { try? d.write(to: Talk.stateFile, options: .atomic) }

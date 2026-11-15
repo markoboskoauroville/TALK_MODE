@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 11
+let VERSION = 12
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -343,6 +343,18 @@ struct Root: View {
     func shown(_ s: String) -> String { s.count > 220 ? "…" + s.suffix(220) : s }
 
     var body: some View {
+        // v12: the whole window scrolls when the screen is too small for it (the bottom, the switches, is then one scroll away);
+        // on every normal size the content fills the window exactly and nothing scrolls
+        GeometryReader { win in
+            ScrollView(.vertical, showsIndicators: false) {
+                content.frame(minHeight: win.size.height)
+            }
+        }
+        .background(Ink.ground)
+        .foregroundStyle(Ink.text)
+    }
+
+    var content: some View {
         VStack(spacing: 0) {
             TopRow(); Hairline()
             GeometryReader { g in
@@ -356,7 +368,7 @@ struct Root: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("space-word")
                     }
-                    Text(!talk.auto && talk.state == .listening ? "PRESS SPACE" : talk.state.word)
+                    Text(!talk.auto && talk.state == .listening ? "MANUAL · PRESS SPACE TO TALK" : talk.state.word)
                         .font(.system(size: big, weight: .black, design: .rounded))
                         .foregroundStyle(Ink.of(talk.state))
                         .multilineTextAlignment(.center)
@@ -377,7 +389,7 @@ struct Root: View {
                 .opacity(talk.enginesOpen ? 0 : 1)
                 .overlay { if talk.enginesOpen { EnginePanel(talk: talk, size: max(17, big * 0.17)).frame(width: g.size.width, height: g.size.height) } }
             }
-            .frame(minHeight: 220)
+            .frame(minHeight: 220, maxHeight: .infinity)
             Hairline()
             steps.padding(.horizontal, 18).padding(.vertical, 12)
         }
@@ -437,12 +449,26 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         mainMenu()
         if App.shot == nil { makeStatusItem() }
         makeWindow()
+        watchScreens()
         if let i = CommandLine.arguments.firstIndex(of: "--preview") {      // the window alone, for a screenshot: no ears, no sessions
             let a = CommandLine.arguments
             Talk.shared.preview(i + 1 < a.count ? a[i + 1] : "listening")
             if let j = a.firstIndex(of: "--size"), j + 1 < a.count {
                 let p = a[j + 1].split(separator: "x").compactMap { Double($0) }
                 if p.count == 2 { window?.setContentSize(NSSize(width: p[0], height: p[1])) }
+            }
+            // --visible WxH: a simulated screen (its visible area); the window is fitted by the same rule as on a real screen change
+            if let j = a.firstIndex(of: "--visible"), j + 1 < a.count, let w = window {
+                let p = a[j + 1].split(separator: "x").compactMap { Double($0) }
+                if p.count == 2 {
+                    let vis = NSRect(x: 0, y: 0, width: p[0], height: p[1])
+                    let m = NSSize(width: min(WindowFit.wishedMin.width, vis.width), height: min(WindowFit.wishedMin.height, vis.height))
+                    w.contentMinSize = m
+                    let before = w.frame
+                    let n = WindowFit.fit(NSRect(origin: .zero, size: before.size), in: vis, minSize: m)
+                    w.setContentSize(n.size)
+                    print("fit: window \(Int(before.width))x\(Int(before.height)) on a screen of \(Int(vis.width))x\(Int(vis.height)) -> \(Int(n.width))x\(Int(n.height)) at \(Int(n.minX)),\(Int(n.minY)), inside: \(vis.contains(n))")
+                }
             }
             if let path = App.shot {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -517,7 +543,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
             w.setFrameOrigin(NSPoint(x: -20000, y: -20000)); w.orderFront(nil)
         } else {
             w.center()
-            w.setFrameAutosaveName("TalkModeMain")
+            WindowFit.apply(w, useRemembered: true)      // v12: back where it was on this screen setup, always fully on screen
             w.makeKeyAndOrderFront(nil)
         }
         DispatchQueue.main.async { self.enforceOneTitle(w) }
@@ -545,7 +571,39 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     }
     func windowDidBecomeKey(_ n: Notification) { enforceOneTitle() }
     func windowDidResignKey(_ n: Notification) { enforceOneTitle() }
-    func windowDidResize(_ n: Notification) { enforceOneTitle() }
+    func windowDidResize(_ n: Notification) { enforceOneTitle(); scheduleFit() }
+    func windowDidMove(_ n: Notification) { scheduleFit() }
+    func windowDidChangeScreen(_ n: Notification) { scheduleFit() }
+    func windowDidEndLiveResize(_ n: Notification) { fitNow() }
+
+    // v12: nothing goes out of the display. After every move/resize, screen change, wake and launch.
+    private var fitTimer: Timer?
+    private var lastSetup = ""
+    func scheduleFit() {
+        guard App.shot == nil else { return }
+        fitTimer?.invalidate()
+        fitTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in self?.fitNow() }
+    }
+    func fitNow() {
+        guard App.shot == nil, let w = window else { return }
+        WindowFit.apply(w)
+        if !w.styleMask.contains(.fullScreen) { WindowFit.remember(w.frame) }
+    }
+    func screensChanged() {
+        guard App.shot == nil, let w = window else { return }
+        let sig = WindowFit.currentSignature
+        let changed = sig != lastSetup; lastSetup = sig
+        WindowFit.apply(w, useRemembered: changed)       // a known setup gets its remembered place; a new one is fitted
+        if !w.styleMask.contains(.fullScreen) { WindowFit.remember(w.frame) }
+    }
+    func watchScreens() {
+        lastSetup = WindowFit.currentSignature
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            // macOS sends it while the screens are still settling: once at once, once after they have
+            self?.screensChanged(); DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { self?.screensChanged() } }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { self?.screensChanged() } }
+    }
     func windowDidEnterFullScreen(_ n: Notification) { enforceOneTitle() }
     func windowDidExitFullScreen(_ n: Notification) { enforceOneTitle() }
 

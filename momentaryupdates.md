@@ -55,3 +55,9 @@ Keep the audio of each utterance it sends: ~/Library/Application Support/Talk Mo
 "in our app talk mode These are unnecessary parts, language, ears. I don't need these things. Because language is in my transcription blob. I can adjust everything and this is what is the default."
 
 **Status:** saved first; built in v11.
+
+## 15.11.2026, request 13 (v12): the window out of the screen, and "PAUSED · RECORDING"
+
+"Please update the talk mode again. User interface is disaster. It going out of the screen and is just staying there. Please make it understand when I leave it somewhere that nothing is going out of the display. It needs to adjust its height and heights so I see the bottom of the thing. and especially in When I change monitors then so monitors a different size then it is falling out ... You are giving confusing messages in this talk mode. I am recording now, it says paused recording. What is paused? I am recording right now, there is no pause at all. It is recording. What is this paused?"
+
+**Status:** saved first; built in v12.

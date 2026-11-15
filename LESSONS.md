@@ -25,3 +25,9 @@
 - 15.11.2026 (v11): the keyboard tap sits at the HID level, before Macro Recorder's session tap, and on the main run loop:
   a frozen Talk Mode cannot hold the keyboard (macOS disables a tap that does not answer), and its frozen main thread stops
   the beats, so Macro Recorder lifts the mouse lock within 5 s.
+
+- 15.11.2026 (v12): "PAUSED · RECORDING" was the state while Voice to Text's recording.flag/take-open was alive: Talk Mode was
+  waiting, not recording, and the word said the opposite of what Marko felt. A state word must say who does what, from his
+  side: RECORDING… is his take in Talk Mode, "VOX IS RECORDING — I WAIT" is another recorder holding the microphone.
+- 15.11.2026 (v12): setFrameAutosaveName restores a frame that no longer fits a different monitor; the frame is now stored per
+  screen configuration and always passed through WindowFit (shrink, then move inside) after every move, screen change and wake.
