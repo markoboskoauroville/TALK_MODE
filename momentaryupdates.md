@@ -7,3 +7,7 @@
 ## 15.11.2026, request 2 (v4)
 
 "So, talk mode is there. It needs to use my engine basically, voice to text, the same one I'm using for transcription, and of course voice engine for talking. So, engines are in place. This is only logic that it stops and responds. and we can test it, but I want to have control inside the app to which open session I am talking to. So it needs to list all my open session by folders. Folders are meaning in which device is the session. So I open the devices and then I can talk to any of my sessions. That should be next update please."
+
+## 15.11.2026, request 3 (v4)
+
+"And of course the session are ordered by activity. So last active session is at the top"
