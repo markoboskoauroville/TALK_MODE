@@ -41,6 +41,17 @@ final class Talk: ObservableObject {
     @Published var pause: Double { didSet { UserDefaults.standard.set(pause, forKey: "pause"); work.async { self.vad.pause = self.pause } } }
     @Published var minLength: Double { didSet { UserDefaults.standard.set(minLength, forKey: "minLength"); work.async { self.vad.minLength = self.minLength } } }
 
+    /// v5 (Marko, 15.11.2026: "how good is each engine and how fast is each engine in the engine name everywhere"): the engine of each
+    /// language with its median time and stars, read from Voice to Text's /engines ("Deepgram · 1.0 s · ★★★★☆")
+    @Published private(set) var earsLabel: [String: String] = [:]
+    func refreshEars() {
+        DispatchQueue.global().async {
+            let l = Hearing.engineLabels()
+            DispatchQueue.main.async { if !l.isEmpty { self.earsLabel = l } }
+        }
+    }
+    func earsText(_ code: String) -> String { earsLabel[code] ?? "Voice to Text not answering" }
+
     private let ears = Ears()
     private let vad = VAD()
     private let work = DispatchQueue(label: "talk.vad")
@@ -56,6 +67,9 @@ final class Talk: ObservableObject {
         lang = d.string(forKey: "lang") ?? "en"
         pause = d.object(forKey: "pause") as? Double ?? 1.3
         minLength = d.object(forKey: "minLength") as? Double ?? 0.6
+        refreshEars()
+        let t = Timer(timeInterval: 20, repeats: true) { [weak self] _ in self?.refreshEars() }
+        RunLoop.main.add(t, forMode: .common)
     }
 
     // ------------------------------------------------------------ start
@@ -104,7 +118,7 @@ final class Talk: ObservableObject {
         let language = DispatchQueue.main.sync { self.lang }
         hearQ.async {
             let r = Hearing.hear(s, lang: talking ? language : "en")
-            DispatchQueue.main.async { self.heardVia = r.via; self.handle(r.text, error: r.error) }
+            DispatchQueue.main.async { self.heardVia = r.via; self.handle(r.text, error: r.error); self.refreshEars() }
         }
     }
 

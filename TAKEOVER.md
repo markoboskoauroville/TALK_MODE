@@ -1,5 +1,7 @@
 # Talk Mode (Mantra): TAKEOVER
 
+**v5, 15.11.2026: speed and quality in the engine name (Marko: "how good is each engine and how fast is each engine in the engine name everywhere").** Voice to Text v24's `/hear` answer names the engine with its median time and stars, so the HEARD line reads "WRITTEN DOWN BY  Deepgram EN · 1.0 s · ★★★★☆ · now 1.3 s · Frankfurt · ...". A new cell EARS · TIME · QUALITY in the window (id `ears`) and the Language submenu of the menu bar show the engine picked for the language with the same tag, read from `GET /engines` (`label`, `label_hr`) every 20 s and after every utterance; the engine of each language comes from Voice to Text's preferences `engine_en` / `engine_hr`. Against Voice to Text before v24 the labels are plain names.
+
 **What it is.** A Swift menu-bar app with one window for a real spoken conversation with a Claude Code session, hands
 free. Marko talks and pauses; his words are written into the chosen Claude Code session; Claude answers aloud (every
 reply ends with `langsay`, spoken through MANTRA_VOICE); while the voice talks Talk Mode does not listen; then it listens

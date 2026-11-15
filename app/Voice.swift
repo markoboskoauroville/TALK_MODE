@@ -212,7 +212,31 @@ enum Hearing {
         return (text, err, via)
     }
 
+    /// "Deepgram EN · 1.0 s · ★★★★☆ · now 1.3 s · Frankfurt …": the engine's own name carries its median time and stars (Voice to
+    /// Text v24+), "now" is this take
     static func label(_ engine: String?, _ route: String?, _ secs: Double?) -> String {
-        [engine ?? "", route ?? "", secs.map { String(format: "%.1f s", $0) } ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        [engine ?? "", secs.map { String(format: "now %.1f s", $0) } ?? "", route ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// v5: ["en": "Deepgram · 1.0 s · ★★★★☆", "hr": "..."] for the engine picked for each language in Voice to Text, from GET /engines
+    static func engineLabels() -> [String: String] {
+        guard let url = URL(string: api + "/engines") else { return [:] }
+        var r = URLRequest(url: url, timeoutInterval: 4)
+        r.httpMethod = "GET"
+        let sem = DispatchSemaphore(value: 0)
+        var j: [String: Any]?
+        URLSession.shared.dataTask(with: r) { d, _, _ in
+            if let d { j = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] }
+            sem.signal()
+        }.resume()
+        _ = sem.wait(timeout: .now() + 5)
+        guard let list = j?["engines"] as? [[String: Any]] else { return [:] }
+        let prefs = UserDefaults(suiteName: "com.mantra.voicetotext")
+        var out: [String: String] = [:]
+        for (code, key) in [("en", "label"), ("hr", "label_hr")] {
+            let id = prefs?.string(forKey: "engine_" + code) ?? "assemblyai"
+            if let e = list.first(where: { $0["id"] as? String == id }), let t = e[key] as? String { out[code] = t }
+        }
+        return out
     }
 }

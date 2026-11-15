@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 4
+let VERSION = 5
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -298,6 +298,10 @@ struct Root: View {
                         Text("HR").foregroundStyle(talk.lang == "hr" ? Ink.green : Ink.grey).word("Croatian", id: "lang-hr", value: talk.lang == "hr" ? "on" : "off") { talk.lang = "hr" }
                     }
                 }
+                Cell(label: "EARS · TIME · QUALITY") {
+                    Text(talk.earsText(talk.lang)).fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("ears")
+                }
                 Cell(label: "PAUSE THAT ENDS A SENTENCE") {
                     HStack(spacing: 6) {
                         Text("−").foregroundStyle(Ink.grey).word("Shorter pause", id: "pause-less") { talk.pause = max(0.6, ((talk.pause - 0.1) * 10).rounded() / 10) }
@@ -501,7 +505,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         mic.submenu = mm; m.addItem(mic)
         let lang = NSMenuItem(title: "Language", action: nil, keyEquivalent: ""), lm = NSMenu()
         for (code, name) in [("en", "English"), ("hr", "Croatian")] {
-            let i = NSMenuItem(title: name, action: #selector(menuLang(_:)), keyEquivalent: "")
+            let i = NSMenuItem(title: name + " · " + t.earsText(code), action: #selector(menuLang(_:)), keyEquivalent: "")
             i.target = self; i.representedObject = code; i.state = t.lang == code ? .on : .off; lm.addItem(i)
         }
         lang.submenu = lm; m.addItem(lang)
