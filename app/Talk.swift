@@ -398,23 +398,29 @@ final class Talk: ObservableObject {
         return dir.appendingPathComponent("state.json")
     }()
 
-    /// v9: every utterance that goes to the ears is kept as takes/<time>.wav (16 kHz mono), the newest 20 only
-    private(set) var lastWav = ""
+    /// v10 (Marko, 15.11.2026: "please use archive the same we are using on my phones. It's AAC tiny files ... You never
+    /// store the original WAV"): the microphone is taken at its own full quality (48 kHz, float), brought to 16 kHz mono in
+    /// memory for the engines (the WAV is never written by Talk Mode), and every take is archived ONLY as AAC in MP4,
+    /// mono, 32 kbit/s, as TTT's archive (MaEncoder.kt): takes/<time>.m4a, the newest 50.
+    private(set) var lastTake = ""
     private func keepTake(_ s: [Float]) {
-        let dir = Talk.stateFile.deletingLastPathComponent().appendingPathComponent("takes")
-        let fm = FileManager.default
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd_HH-mm-ss-SSS"
-        let url = dir.appendingPathComponent(f.string(from: Date()) + ".wav")
-        guard (try? WAV.data(s).write(to: url)) != nil else { return }
-        let all = ((try? fm.contentsOfDirectory(atPath: dir.path)) ?? []).filter { $0.hasSuffix(".wav") }.sorted()
-        for old in all.dropLast(20) { try? fm.removeItem(at: dir.appendingPathComponent(old)) }
-        DispatchQueue.main.async { self.lastWav = url.path; self.saveState() }
+        DispatchQueue.global(qos: .utility).async {
+            let dir = Talk.stateFile.deletingLastPathComponent().appendingPathComponent("takes")
+            let fm = FileManager.default
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd_HH-mm-ss-SSS"
+            let url = dir.appendingPathComponent(f.string(from: Date()) + ".m4a")
+            guard AAC.write(s, to: url) else { NSLog("[Talk] AAC archive failed: %@", url.path); return }
+            let all = ((try? fm.contentsOfDirectory(atPath: dir.path)) ?? []).filter { $0.hasSuffix(".m4a") || $0.hasSuffix(".wav") }.sorted()
+            for old in all where old.hasSuffix(".wav") { try? fm.removeItem(at: dir.appendingPathComponent(old)) }   // v9's WAVs: never kept
+            for old in all.filter({ $0.hasSuffix(".m4a") }).dropLast(50) { try? fm.removeItem(at: dir.appendingPathComponent(old)) }
+            DispatchQueue.main.async { self.lastTake = url.path; self.saveState() }
+        }
     }
 
     func saveState() {
         let j: [String: Any] = ["on": on, "state": state.word, "target": target?.name ?? "", "target_device": target?.device ?? "", "target_id": target?.id ?? "", "heard_via": heardVia,
-                                "mic": device?.name ?? "", "lang": lang, "last_wav": lastWav, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
+                                "mic": device?.name ?? "", "lang": lang, "last_take": lastTake, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
                                 "time": ISO8601DateFormatter().string(from: Date())]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted]) { try? d.write(to: Talk.stateFile, options: .atomic) }
     }

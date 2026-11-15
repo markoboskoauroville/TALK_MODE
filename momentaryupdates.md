@@ -37,3 +37,7 @@ Marko, 15.11.2026, word for word:
 ## 15.11.2026, request 8 (v9, via the master session)
 
 Keep the audio of each utterance it sends: ~/Library/Application Support/Talk Mode (Mantra)/takes/<timestamp>.wav (16 kHz mono, the last 20), its path in state.json as "last_wav", so one recorded sentence can be run through every Voice to Text engine.
+
+## 15.11.2026, request 9 (v10)
+
+"please use archive the same we are using on my phones. It's AAC tiny files. That's it. You never store the original WAV. So the same principle apply here. If it's not, I don't know. Record in full quality, 48 kHz, 24 bits, and then you need to compress it to tiny WAV file and convert it to AAC for even tinier file."

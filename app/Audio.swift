@@ -246,3 +246,20 @@ enum WAV {
         return Array(UnsafeBufferPointer(start: p, count: Int(out.frameLength)))
     }
 }
+
+/// v10: the archive format of TTT (MaEncoder.kt): AAC in MP4, mono, 32 kbit/s, from the 16 kHz take
+enum AAC {
+    static func write(_ s: [Float], to url: URL) -> Bool {
+        guard !s.isEmpty, let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Ears.rate, channels: 1, interleaved: false),
+              let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(s.count)), let p = buf.floatChannelData?[0] else { return false }
+        s.withUnsafeBufferPointer { src in p.update(from: src.baseAddress!, count: s.count) }
+        buf.frameLength = AVAudioFrameCount(s.count)
+        let settings: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: Ears.rate, AVNumberOfChannelsKey: 1,
+                                       AVEncoderBitRateKey: 32000]
+        do {
+            let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+            try file.write(from: buf)
+            return true                                    // the file is closed when `file` goes away
+        } catch { try? FileManager.default.removeItem(at: url); return false }
+    }
+}
