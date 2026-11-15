@@ -163,6 +163,49 @@ struct TopRow: View {
     }
 }
 
+/// ① the sessions: a folder per device (newest activity first), inside each its sessions (newest first)
+struct SessionPicker: View {
+    @ObservedObject var talk: Talk
+
+    func folderTitle(_ f: DeviceFolder) -> String {
+        guard f.online else { return f.name + "  ·  offline" }
+        let n = f.sessions.count
+        return f.name + "  ·  " + String(n) + (n == 1 ? " session" : " sessions")
+    }
+
+    func rowTitle(_ s: Target) -> String {
+        let mark = s.id == talk.target?.id ? "✓ " : ""
+        let tail: String = s.deliverable ? (s.detail.isEmpty ? "" : "  ·  " + s.detail) : "  ·  " + s.reason
+        return mark + s.name + "  ·  " + Roster.ago(s.active) + tail
+    }
+
+    var label: String {
+        guard let t = talk.target else { return "CHOOSE THE SESSION" }
+        return t.device + "  ›  " + t.name
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(talk.folders) { (f: DeviceFolder) in
+                Menu(folderTitle(f)) { folderItems(f) }
+            }
+            Divider()
+            Button(talk.scanning ? "Looking for sessions…" : "Look for sessions again") { talk.refreshSessions() }
+        } label: {
+            Text(label).foregroundStyle(talk.target == nil ? Ink.amber : Ink.text)
+        }
+        .menuStyle(.borderlessButton).fixedSize()
+        .accessibilityLabel("Talk to session")
+    }
+
+    @ViewBuilder func folderItems(_ f: DeviceFolder) -> some View {
+        if !f.note.isEmpty { Text(f.note) }
+        ForEach(f.sessions) { (s: Target) in
+            Button(rowTitle(s)) { talk.choose(s) }.disabled(!s.deliverable)
+        }
+    }
+}
+
 struct Root: View {
     @ObservedObject var talk = Talk.shared
 
@@ -215,26 +258,7 @@ struct Root: View {
                 HStack(spacing: 8) {
                     StepNumber(n: 1)
                     Cell(label: "TALK TO") {
-                        Menu {
-                            // a folder per device, newest activity first; inside, the sessions newest first
-                            ForEach(talk.folders) { f in
-                                Menu(f.name + "  ·  " + (f.online ? "\(f.sessions.count) " + (f.sessions.count == 1 ? "session" : "sessions") : "offline")) {
-                                    if !f.note.isEmpty { Text(f.note) }
-                                    ForEach(f.sessions) { s in
-                                        Button((s.id == talk.target?.id ? "✓ " : "") + s.name + "  ·  " + Roster.ago(s.active)
-                                               + (s.deliverable ? (s.detail.isEmpty ? "" : "  ·  " + s.detail) : "  ·  " + s.reason)) { talk.choose(s) }
-                                            .disabled(!s.deliverable)
-                                    }
-                                }
-                            }
-                            Divider()
-                            Button(talk.scanning ? "Looking for sessions…" : "Look for sessions again") { talk.refreshSessions() }
-                        } label: {
-                            Text(talk.target.map { $0.device + "  ›  " + $0.name } ?? "CHOOSE THE SESSION")
-                                .foregroundStyle(talk.target == nil ? Ink.amber : Ink.text)
-                        }
-                        .menuStyle(.borderlessButton).fixedSize()
-                        .accessibilityLabel("Talk to session")
+                        SessionPicker(talk: talk)
                     }
                 }
                 HStack(spacing: 8) {
