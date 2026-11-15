@@ -16,9 +16,24 @@ Marko's words of 15.11.2026 are in momentaryupdates.md. Repo: markoboskoaurovill
 | Talk.swift | the conversation's state machine, sessions and microphones, `state.json` |
 | Audio.swift | the input devices (real microphones only: no virtual device, nothing named like a camera), AVAudioEngine at 16 kHz mono, the voice detector (VAD), WAV |
 | Voice.swift | MANTRA_VOICE 127.0.0.1:8837 (`/hear`, `/speaking`, `/speak/replay`, `/speak/seen`, `/speak`), the Gate, the spoken phrases |
+| Sessions.swift | v4: the sessions in a folder per DEVICE, newest activity first (MacBook Pro, chromium-vm, Nothing Phone, Pixel 7, Cloud), delivery per kind |
 | ITerm.swift | iTerm2 AppleScript: list sessions (id, name, tty), `write text … newline NO`, 0.6 s, Return |
 | Updater.swift | MANTRA_MANIFEST kits/mac-updater, repo TALK_MODE |
 
+- **v4 (15.11.2026), the ears are Voice to Text's.** Every utterance goes to Voice to Text (Mantra) v23+'s local API,
+  `POST 127.0.0.1:8865/hear?lang=en|hr` (WAV body): the engine Marko picked there for that language, its route (Frankfurt
+  relay, key ring, retries) and corrections. The HEARD line shows "WRITTEN DOWN BY Deepgram EN · Frankfurt · 1.1 s".
+  Voice to Text not running: its own binary `--hear <engine from its settings> <wav> <lang>`; not installed: MANTRA_VOICE
+  /hear, said on that line. The voice that answers stays MANTRA_VOICE / Voice Engine.
+- **v4, sessions by device** (① TALK TO, and the menu bar's Talk To): a folder per device, folders ordered by their newest
+  session, sessions inside by last activity ("active 2 min ago"):
+  MacBook Pro = iTerm2 tabs whose tty runs a Claude Code process (`~/.claude/sessions/<pid>.json`: name, folder, busy/idle;
+  activity = the transcript's last change), typed with iTerm2 `write text`. chromium-vm = its tmux sessions
+  (`ssh chromium-vm tmux list-panes -a`, activity = tmux session_activity), typed with `tmux send-keys -l` then Enter.
+  Nothing Phone / Pixel 7 = adb over Tailscale: a `claude` process in Termux is shown GREYED: it runs without tmux, and adb
+  `input` would type into whatever app is on the phone's screen (no Termux sshd either). Cloud = claude.ai/code sessions
+  that wrote to the hub INBOX in the last two days, GREYED ("can't be typed into from here"). Offline devices say so.
+  The choice is remembered (kind:id, then the name); the default is the newest Mac session named mac23…
 - **Listening.** 30 ms frames, an adaptive noise floor (voice = 12 dB over it and over −50 dBFS). An utterance starts after
   90 ms of voice (300 ms before it kept) and ends after **1.3 s** of silence (PAUSE, 0.6–4 s); one whose voice lasts less
   than **0.6 s** is a noise (NOISE LIMIT). Written down by `/hear?lang=en` (HR switch: `lang=hr`).
@@ -44,9 +59,10 @@ Marko's words of 15.11.2026 are in momentaryupdates.md. Repo: markoboskoaurovill
 ## Debug path (no microphone permission, no window)
 
     B="/Applications/Talk Mode (Mantra).app/Contents/MacOS/TalkMode"
-    "$B" --list-sessions            # tty, name, id; and the default
+    "$B" --list-sessions            # every device folder and its sessions (id, activity, why greyed); the default
+    "$B" --deliver vm:talkmode_test "text"      # one delivery by id (or --deliver - --to-tty /dev/ttysNNN "text")
     "$B" --list-mics                # * = the one it would use
-    "$B" --test-wav clip.wav --to-tty /dev/ttys005 [--lang en] [--pause 1.3] [--fast]
+    "$B" --test-wav clip.wav (--to-tty /dev/ttys005 | --to <id>) [--lang en] [--pause 1.3] [--fast] [--mantra-voice]
 
     "$B" --preview thinking --shot /tmp/x.png [--size 720x500]   # the window drawn off screen into a picture
                                     # states: listening hearing writing thinking speaking typing recording down
@@ -62,6 +78,15 @@ word, delivered to a throwaway iTerm2 window running `cat -u` (echoed back, so R
 "Say that again." recognised as the repeat phrase. With a reading playing on BlackHole: gate closed for 14.7 s, 147 of 158
 chunks dropped, nothing heard, nothing sent. Window drawn off screen at 1100×720 and 720×500: one title, nothing cut.
 Not yet: the live microphone (needs Marko's Microphone permission) and the first send by the app itself (Automation).
+
+## Proven 15.11.2026 (v4)
+
+`--list-sessions`: MacBook Pro 2 sessions, chromium-vm 2 tmux sessions, Nothing and Pixel online with their Termux
+`claude` greyed, Cloud 2 greyed, in 0.8 s. The WAV road through Voice to Text v23 (Deepgram EN via Frankfurt, 0.9 s)
+delivered "Hello, Claude. This is a test of talk mode. Can you hear me?" into a throwaway tmux session `talkmode_test`
+running `cat` on chromium-vm and into a throwaway iTerm2 `cat` window; quotes and `$` arrive unchanged over ssh. Both
+throwaway targets removed afterwards. Not tested: the binary fallback end to end (its output format was checked), the
+live microphone, the nested menu by hand.
 
 ## Install (nothing compiles on the Mac)
 

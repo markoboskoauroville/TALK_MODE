@@ -11,3 +11,10 @@
   `tab` is also an iTerm2 class. Long names (`sepTab`, `aTab`, `aSes`) only.
 - 15.11.2026: the debug path (`--test-wav`) runs from an iTerm2 tab, so iTerm2 writes to itself: no Automation prompt
   and no microphone, and the whole road (gate, detector, Whisper, phrases, writer) is proven before Marko allows anything.
+- 15.11.2026 (v4): one SwiftUI expression holding the nested device Menu, its ForEach and the string building did not
+  type-check in time on the runner ("unable to type-check this expression"); the picker became its own View with small
+  helper functions, and it built.
+- 15.11.2026 (v4): the phones' Claude Code runs as `proot → claude` in Termux, with no tmux and no sshd: there is no way
+  to type into it from the Mac that cannot land in another app. Listed greyed with that reason until a tmux (or a socket)
+  exists on the phone.
+
