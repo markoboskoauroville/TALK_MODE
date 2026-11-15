@@ -36,6 +36,15 @@ Marko's words of 15.11.2026 are in momentaryupdates.md. Repo: markoboskoaurovill
   `input` would type into whatever app is on the phone's screen (no Termux sshd either). Cloud = claude.ai/code sessions
   that wrote to the hub INBOX in the last two days, GREYED ("can't be typed into from here"). Offline devices say so.
   The choice is remembered (kind:id, then the name); the default is the newest Mac session named mac23…
+- **v6, SEND NOW and Space** (15.11.2026): the SEND NOW button ends the sentence being heard and sends it at once. While
+  the window is in front, Space starts a take (RECORDING…, the voice stops if it talks) and the second Space sends it
+  (SENDING). A local key monitor: Space never reaches or leaves for another app.
+- **v7, AUTO | MANUAL** (saved; the big word above the state, the SENDS cell, the menu): AUTO sends after the pause as
+  before; MANUAL sends nothing by itself (the state reads PRESS SPACE). The global ⌃⌥T is gone (Marko: not needed).
+- **v8, ENGINES** (CHANGE in the EARS cell, or the menu): every Voice to Text engine for the language, big rows with time,
+  stars, quality %, credit (keys, free audio left in its window, trial credit or paid per hour, from Voice to Text's own
+  records, nothing asked online) and route; BEST | STARS | TIME; a click or ↑ ↓ + Return makes it Voice to Text's engine
+  for that language (POST 127.0.0.1:8865/engines/select, Voice to Text v26+), Esc closes.
 - **Listening.** 30 ms frames, an adaptive noise floor (voice = 12 dB over it and over −50 dBFS). An utterance starts after
   90 ms of voice (300 ms before it kept) and ends after **1.3 s** of silence (PAUSE, 0.6–4 s); one whose voice lasts less
   than **0.6 s** is a noise (NOISE LIMIT). Written down by `/hear?lang=en` (HR switch: `lang=hr`).
