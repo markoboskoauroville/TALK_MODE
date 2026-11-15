@@ -45,6 +45,7 @@ Marko's words of 15.11.2026 are in momentaryupdates.md. Repo: markoboskoaurovill
   stars, quality %, credit (keys, free audio left in its window, trial credit or paid per hour, from Voice to Text's own
   records, nothing asked online) and route; BEST | STARS | TIME; a click or ↑ ↓ + Return makes it Voice to Text's engine
   for that language (POST 127.0.0.1:8865/engines/select, Voice to Text v26+), Esc closes.
+- **v9, takes kept**: every utterance sent to the ears is saved as `~/Library/Application Support/Talk Mode (Mantra)/takes/<time>.wav` (16 kHz mono, newest 20), the newest in state.json `last_wav`.
 - **Listening.** 30 ms frames, an adaptive noise floor (voice = 12 dB over it and over −50 dBFS). An utterance starts after
   90 ms of voice (300 ms before it kept) and ends after **1.3 s** of silence (PAUSE, 0.6–4 s); one whose voice lasts less
   than **0.6 s** is a noise (NOISE LIMIT). Written down by `/hear?lang=en` (HR switch: `lang=hr`).

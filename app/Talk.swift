@@ -140,6 +140,7 @@ final class Talk: ObservableObject {
         if !talking && !forced && span > 4 { DispatchQueue.main.async { self.voiceEnded() }; return }   // typing mode: only short phrases
         DispatchQueue.main.async { if forced { self.state = .sending } else if self.on { self.state = .writing } }
         let language = DispatchQueue.main.sync { self.lang }
+        if talking || forced { keepTake(s) }
         hearQ.async {
             let r = Hearing.hear(s, lang: talking || forced ? language : "en")
             DispatchQueue.main.async {
@@ -397,9 +398,23 @@ final class Talk: ObservableObject {
         return dir.appendingPathComponent("state.json")
     }()
 
+    /// v9: every utterance that goes to the ears is kept as takes/<time>.wav (16 kHz mono), the newest 20 only
+    private(set) var lastWav = ""
+    private func keepTake(_ s: [Float]) {
+        let dir = Talk.stateFile.deletingLastPathComponent().appendingPathComponent("takes")
+        let fm = FileManager.default
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd_HH-mm-ss-SSS"
+        let url = dir.appendingPathComponent(f.string(from: Date()) + ".wav")
+        guard (try? WAV.data(s).write(to: url)) != nil else { return }
+        let all = ((try? fm.contentsOfDirectory(atPath: dir.path)) ?? []).filter { $0.hasSuffix(".wav") }.sorted()
+        for old in all.dropLast(20) { try? fm.removeItem(at: dir.appendingPathComponent(old)) }
+        DispatchQueue.main.async { self.lastWav = url.path; self.saveState() }
+    }
+
     func saveState() {
         let j: [String: Any] = ["on": on, "state": state.word, "target": target?.name ?? "", "target_device": target?.device ?? "", "target_id": target?.id ?? "", "heard_via": heardVia,
-                                "mic": device?.name ?? "", "lang": lang, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
+                                "mic": device?.name ?? "", "lang": lang, "last_wav": lastWav, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
                                 "time": ISO8601DateFormatter().string(from: Date())]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted]) { try? d.write(to: Talk.stateFile, options: .atomic) }
     }

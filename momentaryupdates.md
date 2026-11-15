@@ -33,3 +33,7 @@ Marko, 15.11.2026, word for word:
 ## 15.11.2026, request 7 (v8; his message was cut off at the end)
 
 "I want to have luxurious changing of engines, it's basically will be remote control for our VOX application, audio to text, but in this app, talk mode, I want to have this option, it means I have the stars ratings, timing and everything, and the credits and…"
+
+## 15.11.2026, request 8 (v9, via the master session)
+
+Keep the audio of each utterance it sends: ~/Library/Application Support/Talk Mode (Mantra)/takes/<timestamp>.wav (16 kHz mono, the last 20), its path in state.json as "last_wav", so one recorded sentence can be run through every Voice to Text engine.
