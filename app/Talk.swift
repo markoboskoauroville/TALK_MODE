@@ -184,6 +184,21 @@ final class Talk: ObservableObject {
     }
 
     func toggle() { setOn(!on) }
+
+    /// --preview <state>: the window filled with examples, nothing listens, nothing is sent (screenshots only)
+    func preview(_ what: String) {
+        on = what != "typing"
+        let all: [String: TalkState] = ["listening": .listening, "hearing": .hearing, "writing": .writing, "thinking": .thinking,
+                                        "speaking": .speaking, "typing": .typing, "recording": .recording, "down": .voiceDown]
+        state = all[what] ?? .listening
+        heard = ["thinking", "speaking", "writing"].contains(what)
+            ? "Please check the render of the second version and tell me when the upload to Drive is finished." : ""
+        sessions = [TermSession(id: "preview", name: "mac23_15-11_(real talk mode)", tty: "/dev/ttys000", active: Date())]
+        target = sessions.first
+        devices = [InputDevice(id: 0, uid: "preview", name: "External Microphone")]
+        device = devices.first
+        levelDB = -30
+    }
     func repeatLast() { Voice.replay() }
 
     // ------------------------------------------------------------ sessions and microphones

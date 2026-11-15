@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 2
+let VERSION = 3
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -298,6 +298,8 @@ enum HotKey {
 // ---------------------------------------------------------------- the app
 final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
     static let shared = App()
+    /// --preview <state> --shot <file.png> [--size WxH]: the window drawn off screen into a picture, then the app quits
+    static let shot: String? = CommandLine.arguments.firstIndex(of: "--shot").flatMap { $0 + 1 < CommandLine.arguments.count ? CommandLine.arguments[$0 + 1] : nil }
     var window: NSWindow?
     private var status: NSStatusItem?
     private var activity: NSObjectProtocol?
@@ -312,8 +314,25 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         UserDefaults.standard.set(false, forKey: "NSQuitAlwaysKeepsWindows")
         NSApp.appearance = NSAppearance(named: .darkAqua)
         mainMenu()
-        makeStatusItem()
+        if App.shot == nil { makeStatusItem() }
         makeWindow()
+        if let i = CommandLine.arguments.firstIndex(of: "--preview") {      // the window alone, for a screenshot: no ears, no sessions
+            let a = CommandLine.arguments
+            Talk.shared.preview(i + 1 < a.count ? a[i + 1] : "listening")
+            if let j = a.firstIndex(of: "--size"), j + 1 < a.count {
+                let p = a[j + 1].split(separator: "x").compactMap { Double($0) }
+                if p.count == 2 { window?.setContentSize(NSSize(width: p[0], height: p[1])) }
+            }
+            if let path = App.shot {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    guard let v = self.window?.contentView?.superview, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { exit(1) }
+                    v.cacheDisplay(in: v.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+                    print("shot \(path)"); exit(0)
+                }
+            }
+            return
+        }
         HotKey.action = { Talk.shared.toggle() }
         HotKey.register()
         // listening goes on with the window behind others (no App Nap)
@@ -351,11 +370,15 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         w.contentMinSize = NSSize(width: 720, height: 500)
         w.contentView = NSHostingView(rootView: Root())
         w.delegate = self
-        w.center()
-        w.setFrameAutosaveName("TalkModeMain")
         window = w
         enforceOneTitle(w)
-        w.makeKeyAndOrderFront(nil)
+        if App.shot != nil {                       // --shot: drawn off every screen, nothing comes to the front
+            w.setFrameOrigin(NSPoint(x: -20000, y: -20000)); w.orderFront(nil)
+        } else {
+            w.center()
+            w.setFrameAutosaveName("TalkModeMain")
+            w.makeKeyAndOrderFront(nil)
+        }
         DispatchQueue.main.async { self.enforceOneTitle(w) }
     }
 
@@ -545,7 +568,7 @@ enum Main {
             exit(0)
         }
         let app = NSApplication.shared
-        app.setActivationPolicy(.regular)
+        app.setActivationPolicy(args.contains("--shot") ? .accessory : .regular)
         app.delegate = App.shared
         app.run()
     }

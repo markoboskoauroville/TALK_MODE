@@ -48,6 +48,9 @@ Marko's words of 15.11.2026 are in momentaryupdates.md. Repo: markoboskoaurovill
     "$B" --list-mics                # * = the one it would use
     "$B" --test-wav clip.wav --to-tty /dev/ttys005 [--lang en] [--pause 1.3] [--fast]
 
+    "$B" --preview thinking --shot /tmp/x.png [--size 720x500]   # the window drawn off screen into a picture
+                                    # states: listening hearing writing thinking speaking typing recording down
+
 The WAV is fed in real time (100 ms chunks) through the same Gate, detector, `/hear`, phrases and iTerm2 writer; one
 JSON line per step (`loaded`, `voice`, `utterance`, `heard`, `sent`, `gate-closed`, `done`). Run it from an iTerm2 tab:
 iTerm2 talking to itself needs no Automation permission. Target a throwaway tab running `cat`, never a real session.
