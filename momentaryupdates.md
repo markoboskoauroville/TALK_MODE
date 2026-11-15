@@ -29,3 +29,7 @@ Marko, 15.11.2026, word for word:
 ## 15.11.2026, request 6 (v7)
 
 "Yes, but this shortcut is not necessary because now we have mode Auto Advanced and Manual and we have spacebar. So there is no need for this."
+
+## 15.11.2026, request 7 (v8; his message was cut off at the end)
+
+"I want to have luxurious changing of engines, it's basically will be remote control for our VOX application, audio to text, but in this app, talk mode, I want to have this option, it means I have the stars ratings, timing and everything, and the credits and…"
