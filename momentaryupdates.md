@@ -83,3 +83,7 @@ Keep the audio of each utterance it sends: ~/Library/Application Support/Talk Mo
 ## 15.11.2026, request 17 (v13): Whisper hallucinations on silence (from the coordinator, observed 15.11.2026)
 
 While Marko was away, AUTO sent "I'm going to go to the bathroom." (twice), "I'm going to go ahead and start the game.", "I'm going to go get some coffee.": classic Whisper hallucinations on room noise. Guard: real speech energy for 0.6 s above the noise floor; drop known hallucination phrases and near-duplicates within 2 min; drop empty-ish / no_speech results; dropped ones shown briefly as "ignored (noise)" and logged, never sent.
+
+## 15.11.2026, request 18 (v14): sound-tag transcripts (from the coordinator)
+
+The noise guard let through sound descriptions: Marko's whistling arrived twice as "**whistling**" and "**whistles**"; also seen "kuf kuf kuf", "oooohhhhhh", "Sigh...". Drop any utterance that is only a sound description: wrapped in *...*, **...**, [...], (...), music-note signs, or a single interjection/onomatopoeia (sigh, cough, whistle/whistling/whistles, laugh/laughs, music, applause, hmm, oh+, ah+, kuf, repeated syllables). Same "ignored (noise)" note and ignored.log.
