@@ -223,7 +223,7 @@ final class SpaceMode: ObservableObject {
             return nil
         }
         if type == .keyDown, !repeatKey, e.flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty,
-           let i = Talk.fKeyCodes.firstIndex(of: code) {                      // v16: F1.. turn the switches (this tap sits before Voice to Text's F1)
+           let i = Talk.fKeyCodes.firstIndex(of: code) {                      // v17: F5..F8 turn the switches (moved from F1-F4: Voice to Text owns F1)
             DispatchQueue.main.async { Talk.shared.toggleSwitch(i) }
             return nil
         }

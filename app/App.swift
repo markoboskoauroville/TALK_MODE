@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 16
+let VERSION = 17
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -365,8 +365,8 @@ struct Root: View {
     var content: some View {
         VStack(spacing: 0) {
             TopRow(); Hairline()
-            // v16: the cheat sheet (Marko: "at the top of user interface there will be a cheat sheet it will say F1 which switch, F2 which switch")
-            Text(talk.flash.isEmpty ? "F1 TALK MODE · F2 AUTO · F3 SPACE BAR MODE · F4 AUTO SEND WITHOUT ENTER" : talk.flash)
+            // v16: the cheat sheet (Marko: "at the top of user interface there will be a cheat sheet it will say F1 which switch, F6 which switch")
+            Text(talk.flash.isEmpty ? "F5 TALK MODE · F6 AUTO · F7 SPACE BAR MODE · F8 AUTO SEND WITHOUT ENTER" : talk.flash)
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .foregroundStyle(talk.flash.isEmpty ? Ink.dim : Ink.amber)
                 .lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center)
@@ -434,15 +434,15 @@ struct Root: View {
                 HStack(spacing: 8) {
                     StepNumber(n: 2)
                     OnOff(title: "TALK MODE", caption: talk.on ? "listening and sending" : "typing: only the switch phrase",
-                          id: "talk-mode", isOn: Binding(get: { talk.on }, set: { talk.setOn($0) }), key: "F1")
+                          id: "talk-mode", isOn: Binding(get: { talk.on }, set: { talk.setOn($0) }), key: "F5")
                 }
                 OnOff(title: talk.auto ? "AUTO" : "MANUAL", caption: talk.auto ? "sends after the pause" : "SPACE records, SPACE sends",
-                      id: "auto", isOn: Binding(get: { talk.auto }, set: { talk.auto = $0 }), key: "F2")
+                      id: "auto", isOn: Binding(get: { talk.auto }, set: { talk.auto = $0 }), key: "F6")
                 OnOff(title: "SPACE BAR MODE", caption: space.on || talk.spacePreview ? "Space talks · keyboard and mouse off" : "Space starts and sends your voice, anywhere; keyboard and mouse off",
                       id: "space-mode", isOn: Binding(get: { space.on || space.starting || talk.spacePreview },
-                                                      set: { v in v ? space.enable() : space.disable("switch") }), tint: Ink.orange, key: "F3")
+                                                      set: { v in v ? space.enable() : space.disable("switch") }), tint: Ink.orange, key: "F7")
                 OnOff(title: "AUTO SEND WITHOUT ENTER", caption: talk.autoSendNoEnter ? "each Space take is sent at once" : "off: Space adds to the draft, Enter sends",
-                      id: "auto-send", isOn: Binding(get: { talk.autoSendNoEnter }, set: { talk.autoSendNoEnter = $0 }), key: "F4")
+                      id: "auto-send", isOn: Binding(get: { talk.autoSendNoEnter }, set: { talk.autoSendNoEnter = $0 }), key: "F8")
             }
             let n = space.note.isEmpty ? talk.note : space.note
             if !n.isEmpty {
@@ -509,7 +509,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
                 }
             }
             if !e.isARepeat, e.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
-               let i = Talk.fKeyCodes.firstIndex(of: Int64(e.keyCode)) { Talk.shared.toggleSwitch(i); return nil }   // v16: F1..F4 while in front
+               let i = Talk.fKeyCodes.firstIndex(of: Int64(e.keyCode)) { Talk.shared.toggleSwitch(i); return nil }   // v16: F5..F8 while in front
             guard e.keyCode == 49, !e.isARepeat,
                   e.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
                   NSApp.isActive, let w = self?.window, w.isKeyWindow, !(w.firstResponder is NSTextView) else { return e }

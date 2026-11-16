@@ -115,9 +115,9 @@ final class Talk: ObservableObject {
         remember(t); send(t)
     }
     func clearDraft() { if !draft.isEmpty { draft = ""; flashed("DRAFT CLEARED") } }
-    /// the F-keys: F1 TALK MODE, F2 AUTO, F3 SPACE BAR MODE, F4 AUTO SEND WITHOUT ENTER (the order of the cheat sheet in the window)
+    /// the F-keys: F5 TALK MODE, F6 AUTO, F7 SPACE BAR MODE, F8 AUTO SEND WITHOUT ENTER (the order of the cheat sheet in the window)
     static let switches = ["TALK MODE", "AUTO", "SPACE BAR MODE", "AUTO SEND WITHOUT ENTER"]
-    static let fKeyCodes: [Int64] = [122, 120, 99, 118]
+    static let fKeyCodes: [Int64] = [96, 97, 98, 100]
     func toggleSwitch(_ i: Int) {
         guard Talk.switches.indices.contains(i) else { return }
         var now = false

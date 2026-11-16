@@ -117,3 +117,6 @@ The noise guard let through sound descriptions: Marko's whistling arrived twice 
 "develop the shortcut keys for all these switches which will be from F1 and how many Fs I need ... at the top of user interface there will be a cheat sheet it will say F1 which switch, F2 which switch etc. and then I can also while I'm in the space mode I can turn switches on and off just by pressing function buttons."
 
 **Status:** saved first; building in v16 (appended draft, Enter sends, Esc clears; switch AUTO SEND WITHOUT ENTER; F1... cheat sheet).
+
+16.11.2026 (Marko, via the close-out list): Voice to Text (Mantra) owns F1 (talk), so Talk Mode's switch keys move from F1-F4 to F5-F8: F5 TALK MODE, F6 AUTO, F7 SPACE BAR MODE, F8 AUTO SEND WITHOUT ENTER. Cheat sheet, manifest talk-states.md and the Queen skill follow. F5-F8 checked free (symbolichotkeys, other apps only offer them as choices; defaults are F1).
+**Status:** saved first; building in v17.
