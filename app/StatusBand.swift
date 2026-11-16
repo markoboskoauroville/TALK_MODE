@@ -27,22 +27,23 @@ final class StatusBand: NSView {
     private var font: NSFont { .monospacedSystemFont(ofSize: 9.5, weight: .semibold) }
     var wantedWidth: CGFloat {
         let t = (word as NSString).size(withAttributes: [.font: font]).width
-        return ceil(t) + 16 + (locked ? 12 : 0)
+        return ceil(t) + 16 + (locked ? 12 : 0) + 8      // + the pipes (HoverCard kit)
     }
     private func x(_ db: Float, _ track: NSRect) -> CGFloat {
         track.minX + CGFloat(max(0, min(1, (db - StatusBand.floorDB) / -StatusBand.floorDB))) * track.width
     }
     override func draw(_ r: NSRect) {
         guard !word.isEmpty else { return }
-        let band = bounds
+        HoverCard.drawPipes(in: bounds)
+        let band = bounds.insetBy(dx: 4, dy: 0)
         NSColor(white: 0, alpha: 0.55).setFill()
         NSBezierPath(roundedRect: band, xRadius: 6, yRadius: 6).fill()
-        var left: CGFloat = 8
+        var left: CGFloat = 8 + 4
         if locked, let img = NSImage(systemSymbolName: "lock.fill", accessibilityDescription: "keyboard and mouse are off") {
             let cfg = img.withSymbolConfiguration(.init(pointSize: 8, weight: .bold))?.tinted(NSColor(red: 0.91, green: 0.45, blue: 0.23, alpha: 1))
             let s = cfg?.size ?? .zero
-            cfg?.draw(in: NSRect(x: 7, y: (band.height - 3 - s.height) / 2 + 1, width: s.width, height: s.height))
-            left = 7 + s.width + 3
+            cfg?.draw(in: NSRect(x: 11, y: (band.height - 3 - s.height) / 2 + 1, width: s.width, height: s.height))
+            left = 11 + s.width + 3
         }
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: wordColor]
         let sz = (word as NSString).size(withAttributes: attrs)

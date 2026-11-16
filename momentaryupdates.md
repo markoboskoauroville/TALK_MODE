@@ -120,3 +120,6 @@ The noise guard let through sound descriptions: Marko's whistling arrived twice 
 
 16.11.2026 (Marko, via the close-out list): Voice to Text (Mantra) owns F1 (talk), so Talk Mode's switch keys move from F1-F4 to F5-F8: F5 TALK MODE, F6 AUTO, F7 SPACE BAR MODE, F8 AUTO SEND WITHOUT ENTER. Cheat sheet, manifest talk-states.md and the Queen skill follow. F5-F8 checked free (symbolichotkeys, other apps only offer them as choices; defaults are F1).
 **Status:** saved first; building in v17.
+
+16.11.2026 (Marko, 16.11.2026): "Please with all my apps on the menu bar, make a comprehensive pop-up menu. When I hover over, I want to see what is it and what is it doing." and "for my apps always make a pipes before and after so I know where one app ends and other begins."
+**Status:** saved first; building in v18 (HoverCard kit from MANTRA_MANIFEST kits/menubar-hover, pilot app; pipes in StatusBand; --hovercard-shot).

@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 17
+let VERSION = 18
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -608,7 +608,19 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         s.button?.setAccessibilityLabel("Talk Mode (Mantra) status")
         s.button?.addSubview(band)
         status = s
+        HoverCard.attach(to: s) { [weak self] in self?.hoverContent() ?? HoverCard.Content(name: "Talk Mode (Mantra)", what: "", state: "") }
         refreshStatusItem()
+    }
+
+    /// the hover card (kit menubar-hover): what it is, the state, what it is doing now
+    func hoverContent() -> HoverCard.Content {
+        let t = Talk.shared
+        var lines = ["Mode: " + (t.auto ? "AUTO" : "manual") + (t.autoSendNoEnter ? " · send without Enter" : ""),
+                     "Space Bar Mode: " + (SpaceMode.shared.on ? "ON, keyboard and mouse off" : "off"),
+                     "Draft: " + (t.draft.isEmpty ? "empty" : "\(t.draft.count) characters")]
+        if let d = t.device { lines.append("Microphone: " + d.name) }
+        return HoverCard.Content(name: "Talk Mode (Mantra)", what: "Talk to a Claude session by voice",
+                                 state: t.on ? t.state.word : "OFF", stateColor: NSColor(Ink.of(t.state)), lines: lines)
     }
 
     /// the one-word state with the live VU meter, the same words and colours as the window; a padlock while Space Bar Mode holds the lock
