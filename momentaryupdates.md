@@ -97,3 +97,9 @@ The noise guard let through sound descriptions: Marko's whistling arrived twice 
 "Please improve my application talk mode. First of all it's not really clear how to use it and the messages on the screen. So for example space mode should be called the space bar mode because right now I don't know can be anything. Also the commands on the screen the big ones should be very clear with only one word. When it's red listening, it means that mic is open and you are recording to my voice. Not you are not recording, you are listening. At the moment I start to talk, you need to put recording on the screen. And when you think, that's nice thinking, and when you start to reply, put reply. And make everything right in the manifest. We want this simple and clean communication with one to two words to understand what's going on. And please update this application to be more clear and precise."
 
 **Status:** saved first; building in v16.
+
+## 16.11.2026, request 20b (v16): status item on the menu bar (from the coordinator)
+
+"sometimes these applications go in the background when I'm inside my, let's say, spacebar mode. Then I need to have some status line actually what's going on. Not only in UI, it needs to be always present. and for that I like it to be right on the menu bar ... similar as our voice to text application ... the same font and the same style as our voice to text and the same VU meter ... same messages so use that UI which we already developed for this application and just when we started actually display can be available already on the menu bar"
+
+**Status:** saved first; building in v16.
