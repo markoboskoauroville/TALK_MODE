@@ -615,10 +615,10 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     func refreshStatusItem() {
         let t = Talk.shared
         let c = Ink.of(t.state)
-        var w = t.state.word
-        if !t.flash.isEmpty { w = t.flash }
-        else if !t.draft.isEmpty { w += " ✎ " + (t.draft.count > 22 ? "…" + t.draft.suffix(22) : t.draft) }
-        band.word = w
+        var shownWord = t.state.word
+        if !t.flash.isEmpty { shownWord = t.flash }
+        else if !t.draft.isEmpty { shownWord += " ✎ " + (t.draft.count > 22 ? "…" + t.draft.suffix(22) : t.draft) }
+        band.word = shownWord
         band.wordColor = NSColor(c)
         band.locked = SpaceMode.shared.on
         band.meterDB = (t.on && t.state != .typing) ? t.levelDB : nil
