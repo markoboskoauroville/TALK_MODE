@@ -37,3 +37,6 @@
 - 15.11.2026 (v13): HEARD cleared 6 s after sending (fade), so an old mis-heard sentence never stays.
 
 - 16.11.2026 (v16): the big word must say what the microphone does, in one word, from his side: red = his voice is being recorded (RECORDING), waiting with an open mic is LISTENING. A status shown only in the window is lost when the app is in the background (Space Bar Mode): the menu bar item with the same word and the VU meter is always there. A full-screen red frame covered the menu bar: the indicator is a strip along the bottom only.
+
+## Lesson: hover card and pipes (16.11.2026)
+Poll the mouse (macOS draws a status item once per display, only one copy owns the button, so a tracking area misses the other display). The panel needs `titleVisibility = .hidden` for the one-title guard. A non-activating NSPanel at statusBar+1 never takes focus. Pipes for text items: attributed title; for icon items: pipedIcon + rightPipe; for view items: drawPipes or PipesView.
