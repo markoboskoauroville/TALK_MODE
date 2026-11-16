@@ -206,13 +206,25 @@ final class SpaceMode: ObservableObject {
                 } else if let l = lastEsc, Date().timeIntervalSince(l) <= 1.0 {
                     lastEsc = nil
                     DispatchQueue.main.async { self.disable("escape") }
-                } else { lastEsc = Date() }
+                } else {
+                    lastEsc = Date()
+                    DispatchQueue.main.async { Talk.shared.clearDraft() }  // v16: Esc clears the draft (a second Esc within 1 s still exits)
+                }
             }
             return nil
         }
         if code == 49, type == .keyDown, !repeatKey,
            e.flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty {
             DispatchQueue.main.async { Talk.shared.spacePressed() }
+            return nil
+        }
+        if type == .keyDown, !repeatKey, code == 36 || code == 76 {          // v16: Return / Enter sends the draft
+            DispatchQueue.main.async { Talk.shared.sendDraft() }
+            return nil
+        }
+        if type == .keyDown, !repeatKey, e.flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty,
+           let i = Talk.fKeyCodes.firstIndex(of: code) {                      // v16: F1.. turn the switches (this tap sits before Voice to Text's F1)
+            DispatchQueue.main.async { Talk.shared.toggleSwitch(i) }
             return nil
         }
         return nil                                                         // every other key: off

@@ -95,6 +95,40 @@ final class Talk: ObservableObject {
     @Published private(set) var device: InputDevice?
     /// v11: the language is Voice to Text's (its pill: EN, HR or AUTO), read from its /status; no selector here any more
     @Published private(set) var lang: String = "en"
+    /// v16 (Marko, 16.11.2026: "I press space, I see the message and then I add more and then when I'm ready I press enter ... the switch
+    /// will be called Auto Send without Enter"): in SPACE BAR MODE each Space take is APPENDED to this draft; Enter sends the whole draft,
+    /// Esc clears it. The switch AUTO SEND WITHOUT ENTER (default OFF = the draft) restores the old way: each take is sent at once.
+    @Published private(set) var draft = ""
+    @Published var autoSendNoEnter: Bool = UserDefaults.standard.bool(forKey: "autoSendNoEnter") {
+        didSet { UserDefaults.standard.set(autoSendNoEnter, forKey: "autoSendNoEnter"); saveState() }
+    }
+    /// a 2 s flash of a switch that an F-key just turned (window and menu bar item)
+    @Published private(set) var flash = ""
+    func flashed(_ t: String) {
+        flash = t
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { if self.flash == t { self.flash = "" } }
+    }
+    func sendDraft() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft = ""
+        guard !t.isEmpty else { return }
+        remember(t); send(t)
+    }
+    func clearDraft() { if !draft.isEmpty { draft = ""; flashed("DRAFT CLEARED") } }
+    /// the F-keys: F1 TALK MODE, F2 AUTO, F3 SPACE BAR MODE, F4 AUTO SEND WITHOUT ENTER (the order of the cheat sheet in the window)
+    static let switches = ["TALK MODE", "AUTO", "SPACE BAR MODE", "AUTO SEND WITHOUT ENTER"]
+    static let fKeyCodes: [Int64] = [122, 120, 99, 118]
+    func toggleSwitch(_ i: Int) {
+        guard Talk.switches.indices.contains(i) else { return }
+        var now = false
+        switch i {
+        case 0: setOn(!on); now = on
+        case 1: auto.toggle(); now = auto
+        case 2: if SpaceMode.shared.on { SpaceMode.shared.disable("switch") } else { SpaceMode.shared.enable(); now = true }
+        default: autoSendNoEnter.toggle(); now = autoSendNoEnter
+        }
+        flashed("F\(i + 1) " + Talk.switches[i] + (now ? " ON" : " OFF"))
+    }
     @Published var pause: Double { didSet { UserDefaults.standard.set(pause, forKey: "pause"); work.async { self.vad.pause = self.pause } } }
     @Published var minLength: Double { didSet { UserDefaults.standard.set(minLength, forKey: "minLength"); work.async { self.vad.minLength = self.minLength } } }
 
@@ -244,6 +278,11 @@ final class Talk: ObservableObject {
         if Phrase.isNoise(text) { ignore(text, "known noise phrase"); return }
         if !forced, let why = duplicate(text) { ignore(text, why); return }
         remember(text)
+        if forced, SpaceMode.shared.on, !autoSendNoEnter {       // v16: the take joins the draft; Enter sends it
+            draft = draft.isEmpty ? text : draft + " " + text
+            heard = ""; note = ""
+            return
+        }
         send(text)
     }
 
@@ -427,6 +466,7 @@ final class Talk: ObservableObject {
         state = all[what] ?? .listening
         manual = what == "manual"
         spacePreview = what == "space"
+        draft = what == "space" ? "Please check the render of the second version" : ""
         if what == "engines" {
             enginesOpen = true
             engines = Hearing.sorted([
@@ -527,7 +567,7 @@ final class Talk: ObservableObject {
 
     func saveState() {
         let j: [String: Any] = ["on": on, "state": state.word, "plain": state.plain, "target": target?.name ?? "", "target_device": target?.device ?? "", "target_id": target?.id ?? "", "heard_via": heardVia,
-                                "mic": device?.name ?? "", "lang": lang, "space_mode": SpaceMode.shared.on, "last_take": lastTake, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
+                                "mic": device?.name ?? "", "lang": lang, "space_mode": SpaceMode.shared.on, "draft": draft, "auto_send_no_enter": autoSendNoEnter, "last_take": lastTake, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
                                 "time": ISO8601DateFormatter().string(from: Date())]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted]) { try? d.write(to: Talk.stateFile, options: .atomic) }
     }

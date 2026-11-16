@@ -111,13 +111,18 @@ struct OnOff: View {
     let id: String
     @Binding var isOn: Bool
     var tint: Color = Ink.green
+    var key = ""
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             Toggle(title, isOn: $isOn)
                 .toggleStyle(.switch).controlSize(.large).labelsHidden().tint(tint)
                 .accessibilityLabel(title).accessibilityIdentifier(id)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 15, weight: .bold, design: .monospaced)).foregroundStyle(isOn ? Ink.text : Ink.grey)
+                HStack(spacing: 6) {
+                    Text(title).font(.system(size: 15, weight: .bold, design: .monospaced)).foregroundStyle(isOn ? Ink.text : Ink.grey)
+                    if !key.isEmpty { Text(key).font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundStyle(Ink.dim)
+                        .padding(.horizontal, 4).overlay(RoundedRectangle(cornerRadius: 3).stroke(Ink.dim, lineWidth: 1)) }
+                }
                 Text(caption).font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(Ink.dim)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -360,6 +365,14 @@ struct Root: View {
     var content: some View {
         VStack(spacing: 0) {
             TopRow(); Hairline()
+            // v16: the cheat sheet (Marko: "at the top of user interface there will be a cheat sheet it will say F1 which switch, F2 which switch")
+            Text(talk.flash.isEmpty ? "F1 TALK MODE · F2 AUTO · F3 SPACE BAR MODE · F4 AUTO SEND WITHOUT ENTER" : talk.flash)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundStyle(talk.flash.isEmpty ? Ink.dim : Ink.amber)
+                .lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center)
+                .padding(.horizontal, 10).padding(.vertical, 5).frame(maxWidth: .infinity)
+                .accessibilityIdentifier("cheat-sheet")
+            Hairline()
             GeometryReader { g in
                 let big = max(20, min(g.size.width / 7.5, g.size.height / 3.4, 170))
                 VStack(spacing: big * 0.22) {
@@ -376,6 +389,14 @@ struct Root: View {
                         .font(.system(size: max(12, big * 0.13), weight: .medium)).foregroundStyle(Ink.dim)
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("state-hint")
+                    if !talk.draft.isEmpty {
+                        VStack(spacing: 4) {
+                            (Text("DRAFT: ").foregroundColor(Ink.dim) + Text("“\(shown(talk.draft))”").foregroundColor(Ink.text))
+                                .font(.system(size: max(18, big * (talk.draft.count > 90 ? 0.24 : 0.36)), weight: .semibold))
+                                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                            Text("Space adds · Enter sends · Esc clears").font(.system(size: max(12, big * 0.13), weight: .medium)).foregroundStyle(Ink.amber)
+                        }.accessibilityIdentifier("draft")
+                    }
                     if talk.on && !talk.heard.isEmpty {
                         (Text("HEARD: ").foregroundColor(Ink.dim) + Text("“\(shown(talk.heard))”").foregroundColor(Ink.text))
                             .font(.system(size: max(18, big * (talk.heard.count > 90 ? 0.24 : 0.36)), weight: .semibold))
@@ -413,13 +434,15 @@ struct Root: View {
                 HStack(spacing: 8) {
                     StepNumber(n: 2)
                     OnOff(title: "TALK MODE", caption: talk.on ? "listening and sending" : "typing: only the switch phrase",
-                          id: "talk-mode", isOn: Binding(get: { talk.on }, set: { talk.setOn($0) }))
+                          id: "talk-mode", isOn: Binding(get: { talk.on }, set: { talk.setOn($0) }), key: "F1")
                 }
                 OnOff(title: talk.auto ? "AUTO" : "MANUAL", caption: talk.auto ? "sends after the pause" : "SPACE records, SPACE sends",
-                      id: "auto", isOn: Binding(get: { talk.auto }, set: { talk.auto = $0 }))
+                      id: "auto", isOn: Binding(get: { talk.auto }, set: { talk.auto = $0 }), key: "F2")
                 OnOff(title: "SPACE BAR MODE", caption: space.on || talk.spacePreview ? "Space talks · keyboard and mouse off" : "Space starts and sends your voice, anywhere; keyboard and mouse off",
                       id: "space-mode", isOn: Binding(get: { space.on || space.starting || talk.spacePreview },
-                                                      set: { v in v ? space.enable() : space.disable("switch") }), tint: Ink.orange)
+                                                      set: { v in v ? space.enable() : space.disable("switch") }), tint: Ink.orange, key: "F3")
+                OnOff(title: "AUTO SEND WITHOUT ENTER", caption: talk.autoSendNoEnter ? "each Space take is sent at once" : "off: Space adds to the draft, Enter sends",
+                      id: "auto-send", isOn: Binding(get: { talk.autoSendNoEnter }, set: { talk.autoSendNoEnter = $0 }), key: "F4")
             }
             let n = space.note.isEmpty ? talk.note : space.note
             if !n.isEmpty {
@@ -485,6 +508,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
                 default: break
                 }
             }
+            if !e.isARepeat, e.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+               let i = Talk.fKeyCodes.firstIndex(of: Int64(e.keyCode)) { Talk.shared.toggleSwitch(i); return nil }   // v16: F1..F4 while in front
             guard e.keyCode == 49, !e.isARepeat,
                   e.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
                   NSApp.isActive, let w = self?.window, w.isKeyWindow, !(w.firstResponder is NSTextView) else { return e }
@@ -590,7 +615,10 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     func refreshStatusItem() {
         let t = Talk.shared
         let c = Ink.of(t.state)
-        band.word = t.state.word
+        var w = t.state.word
+        if !t.flash.isEmpty { w = t.flash }
+        else if !t.draft.isEmpty { w += " ✎ " + (t.draft.count > 22 ? "…" + t.draft.suffix(22) : t.draft) }
+        band.word = w
         band.wordColor = NSColor(c)
         band.locked = SpaceMode.shared.on
         band.meterDB = (t.on && t.state != .typing) ? t.levelDB : nil
