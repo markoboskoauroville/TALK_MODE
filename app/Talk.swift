@@ -7,22 +7,41 @@ import Foundation
 enum TalkState: Equatable {
     case typing, listening, hearing, writing, thinking, speaking, recording, voiceDown, noMic(String), noTarget, manual, sending
 
-    /// v12 (Marko, 15.11.2026: "it says paused recording. What is paused?"): every word says, from Marko's side, what is
-    /// happening right now. PAUSED is gone; Talk Mode's own recording is RECORDING…, another recorder's is named.
+    /// v16 (Marko, 16.11.2026: "the big ones should be very clear with only one word ... LISTENING, RECORDING, thinking, reply").
+    /// The standard of MANTRA_MANIFEST modules/talk-states.md: ONE word each. LISTENING (green) = the microphone is open and waits
+    /// for his voice; RECORDING (red) = his voice is being recorded, from the first moment of speech; THINKING (violet) = sent or
+    /// being turned into text, waiting for Claude; REPLYING (orange) = the answer is being spoken; OFF (grey) = Talk Mode is off.
+    /// Faults are one or two words too (NO MIC, NO VOICE, NO SESSION); another recorder holding the mic is VOX BUSY.
     var word: String {
         switch self {
-        case .typing: return "TALK MODE IS OFF"
+        case .typing: return "OFF"
         case .listening: return "LISTENING"
-        case .hearing: return "I HEAR YOU"
-        case .writing: return "WRITING IT DOWN"
-        case .thinking: return "CLAUDE IS THINKING"
-        case .speaking: return "CLAUDE IS SPEAKING"
-        case .recording: return "VOX IS RECORDING — I WAIT"
-        case .voiceDown: return "VOICE ENGINE IS DOWN"
-        case .noMic: return "NO MICROPHONE"
-        case .noTarget: return "NO SESSION CHOSEN"
-        case .manual: return "RECORDING…"
-        case .sending: return "SENDING"
+        case .hearing: return "RECORDING"
+        case .writing: return "THINKING"
+        case .thinking: return "THINKING"
+        case .speaking: return "REPLYING"
+        case .recording: return "VOX BUSY"
+        case .voiceDown: return "NO VOICE"
+        case .noMic: return "NO MIC"
+        case .noTarget: return "NO SESSION"
+        case .manual: return "RECORDING"
+        case .sending: return "THINKING"
+        }
+    }
+
+    /// the small line under the big word (secondary information, never big)
+    var hint: String {
+        switch self {
+        case .typing: return "switch TALK MODE on to talk"
+        case .listening: return "microphone is open"
+        case .hearing, .manual: return "your voice is being recorded"
+        case .writing, .sending: return "turning your voice into text"
+        case .thinking: return "Claude is working on the answer"
+        case .speaking: return "Claude is speaking"
+        case .recording: return "Voice to Text is recording; I wait"
+        case .voiceDown: return "the voice engine does not answer"
+        case .noMic: return "no microphone to listen with"
+        case .noTarget: return "choose a session in step 1"
         }
     }
 

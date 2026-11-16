@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 15
+let VERSION = 16
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -33,13 +33,15 @@ enum Ink {
     static func of(_ s: TalkState) -> Color {
         switch s {
         case .listening: return green
-        case .hearing: return hex(0x7CF0A8)
-        case .writing: return amber
+        case .hearing: return red
+        case .writing: return violet
         case .thinking: return violet
         case .speaking: return orange
         case .typing: return grey
-        case .recording, .voiceDown, .noMic, .manual: return red
-        case .sending: return amber
+        case .manual: return red
+        case .recording: return grey
+        case .voiceDown, .noMic: return amber
+        case .sending: return violet
         case .noTarget: return amber
         }
     }
@@ -176,9 +178,9 @@ struct TopRow: View {
                 Text("ON").foregroundStyle(Ink.green)
                 Text("OFF").foregroundStyle(Ink.grey).word("Off, quit Talk Mode", id: "off") { DispatchQueue.main.async { NSApp.terminate(nil) } }
                 Spacer()
-                if !space.trusted && App.shot == nil {      // v11: Space Mode's keyboard tap needs Accessibility (never allowed for him)
+                if !space.trusted && App.shot == nil {      // v11: Space Bar Mode's keyboard tap needs Accessibility (never allowed for him)
                     Text("PERMISSIONS").foregroundStyle(Ink.amber)
-                        .word("Permissions: Accessibility for Space Mode", id: "permissions") { SpaceMode.openAccessibilitySettings() }
+                        .word("Permissions: Accessibility for Space Bar Mode", id: "permissions") { SpaceMode.openAccessibilitySettings() }
                 }
                 Text("v\(VERSION)").foregroundStyle(Ink.dim)
                 Text("TOP").foregroundStyle(onTop ? Ink.green : Ink.grey)
@@ -362,20 +364,18 @@ struct Root: View {
                 let big = max(20, min(g.size.width / 7.5, g.size.height / 3.4, 170))
                 VStack(spacing: big * 0.22) {
                     Spacer(minLength: 0)
-                    if space.on || talk.spacePreview {
-                        Text("SPACE MODE · SPACE TALKS")
-                            .font(.system(size: max(18, big * 0.26), weight: .black, design: .rounded))
-                            .foregroundStyle(Ink.orange).multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("space-word")
-                    }
-                    Text(!talk.auto && talk.state == .listening ? "MANUAL · PRESS SPACE TO TALK" : talk.state.word)
+                    Text(talk.state.word)
                         .font(.system(size: big, weight: .black, design: .rounded))
                         .foregroundStyle(Ink.of(talk.state))
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.2)
                         .frame(maxHeight: max(40, g.size.height * 0.5))
                         .accessibilityIdentifier("state")
+                    Text(space.on || talk.spacePreview ? "SPACE BAR MODE · press Space to talk, Space again to send"
+                         : !talk.auto && talk.state == .listening ? "manual: press Space to talk, Space again to send" : talk.state.hint)
+                        .font(.system(size: max(12, big * 0.13), weight: .medium)).foregroundStyle(Ink.dim)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("state-hint")
                     if talk.on && !talk.heard.isEmpty {
                         (Text("HEARD: ").foregroundColor(Ink.dim) + Text("“\(shown(talk.heard))”").foregroundColor(Ink.text))
                             .font(.system(size: max(18, big * (talk.heard.count > 90 ? 0.24 : 0.36)), weight: .semibold))
@@ -417,7 +417,7 @@ struct Root: View {
                 }
                 OnOff(title: talk.auto ? "AUTO" : "MANUAL", caption: talk.auto ? "sends after the pause" : "SPACE records, SPACE sends",
                       id: "auto", isOn: Binding(get: { talk.auto }, set: { talk.auto = $0 }))
-                OnOff(title: "SPACE MODE", caption: space.on || talk.spacePreview ? "keyboard and mouse off · SPACE talks" : "keyboard and mouse off, SPACE anywhere",
+                OnOff(title: "SPACE BAR MODE", caption: space.on || talk.spacePreview ? "Space talks · keyboard and mouse off" : "Space starts and sends your voice, anywhere; keyboard and mouse off",
                       id: "space-mode", isOn: Binding(get: { space.on || space.starting || talk.spacePreview },
                                                       set: { v in v ? space.enable() : space.disable("switch") }), tint: Ink.orange)
             }
@@ -571,21 +571,35 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     func applicationShouldHandleReopen(_ s: NSApplication, hasVisibleWindows: Bool) -> Bool { showWindow(); return true }
 
     // ------------------------------------------------------------ the menu bar item
+    private let band = StatusBand(frame: .zero)
     private func makeStatusItem() {
+        // v16: always present, next to Voice to Text's display: autosaveName + a preferred position right beside its slot (0)
+        let key = "NSStatusItem Preferred Position TalkModeBar"
+        if UserDefaults.standard.object(forKey: key) == nil { UserDefaults.standard.set(1, forKey: key) }
         let s = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        s.autosaveName = "TalkModeBar"
         let m = NSMenu(); m.delegate = self
         s.menu = m
-        s.button?.setAccessibilityLabel("Talk Mode")
+        s.button?.setAccessibilityLabel("Talk Mode (Mantra) status")
+        s.button?.addSubview(band)
         status = s
         refreshStatusItem()
     }
 
+    /// the one-word state with the live VU meter, the same words and colours as the window; a padlock while Space Bar Mode holds the lock
     func refreshStatusItem() {
         let t = Talk.shared
-        let sp = SpaceMode.shared.on
-        let colour: NSColor = sp ? NSColor(red: 0.91, green: 0.45, blue: 0.23, alpha: 1) : t.on ? NSColor(red: 0.2, green: 0.82, blue: 0.48, alpha: 1) : .secondaryLabelColor
-        status?.button?.attributedTitle = NSAttributedString(string: sp ? "SPACE" : t.on ? "TALK" : "talk", attributes: [
-            .foregroundColor: colour, .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .bold)])
+        let c = Ink.of(t.state)
+        band.word = t.state.word
+        band.wordColor = NSColor(c)
+        band.locked = SpaceMode.shared.on
+        band.meterDB = (t.on && t.state != .typing) ? t.levelDB : nil
+        guard let s = status, let button = s.button else { return }
+        let w = band.wantedWidth
+        if abs(s.length - (w + 6)) > 0.5 { s.length = w + 6 }
+        let h = max(18, button.bounds.height - 4)
+        band.frame = NSRect(x: 3, y: (button.bounds.height - h) / 2, width: w, height: h)
+        button.toolTip = t.state.hint + (SpaceMode.shared.on ? " · Space Bar Mode: keyboard and mouse are off" : "")
     }
 
     func menuNeedsUpdate(_ m: NSMenu) {
@@ -599,7 +613,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         rec.target = self; m.addItem(rec)
         let mode = NSMenuItem(title: "Auto (off = Manual)", action: #selector(menuMode), keyEquivalent: "")
         mode.target = self; mode.state = t.auto ? .on : .off; m.addItem(mode)
-        let sp = NSMenuItem(title: SpaceMode.shared.on ? "Space Mode (keyboard and mouse off): turn off" : "Space Mode (keyboard and mouse off)",
+        let sp = NSMenuItem(title: SpaceMode.shared.on ? "Space Bar Mode (keyboard and mouse off): turn off" : "Space Bar Mode (keyboard and mouse off)",
                             action: #selector(menuSpaceMode), keyEquivalent: "")
         sp.target = self; sp.state = SpaceMode.shared.on ? .on : .off; m.addItem(sp)
         let eng = NSMenuItem(title: "Engines… (Voice to Text)", action: #selector(menuEngines), keyEquivalent: ""); eng.target = self; m.addItem(eng)

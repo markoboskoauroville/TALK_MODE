@@ -19,7 +19,7 @@ import ApplicationServices
 final class SpaceMode: ObservableObject {
     static let shared = SpaceMode()
     static let owner = "talkmode-space"
-    static let banner = "SPACE MODE — keyboard and mouse are off · SPACE talks · Esc Esc = exit (Esc once cancels a take) · or press TAKE OVER"
+    static let banner = "SPACE BAR MODE — keyboard and mouse are off · SPACE talks · Esc Esc = exit (Esc once cancels a take) · or press TAKE OVER"
     static let macroAPI = "http://127.0.0.1:8829"
     static let MACRO_MARK: Int64 = 0x4D41_4352_4F4B        // Macro Recorder's own events pass every lock
 
@@ -76,16 +76,16 @@ final class SpaceMode: ObservableObject {
         guard trusted else {
             // the system asks Marko (never answered for him); PERMISSIONS stays amber top right until it is allowed
             _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-            note = "Space Mode needs Accessibility for Talk Mode (Mantra): System Settings › Privacy & Security › Accessibility"
+            note = "Space Bar Mode needs Accessibility for Talk Mode (Mantra): System Settings › Privacy & Security › Accessibility"
             return
         }
-        starting = true; note = "Space Mode: asking Macro Recorder for the lock…"
+        starting = true; note = "Space Bar Mode: asking Macro Recorder for the lock…"
         DispatchQueue.global().async {
             let st = SpaceMode.macro("/status")
             var why = ""
             var ok = false
-            if st == nil { why = "Macro Recorder (Mantra) is not running: Space Mode uses its input lock and its TAKE OVER" }
-            else if (st?["version"] as? Int ?? 0) < 28 { why = "Space Mode needs Macro Recorder (Mantra) v28 or newer (this Mac has v\(st?["version"] as? Int ?? 0))" }
+            if st == nil { why = "Macro Recorder (Mantra) is not running: Space Bar Mode uses its input lock and its TAKE OVER" }
+            else if (st?["version"] as? Int ?? 0) < 28 { why = "Space Bar Mode needs Macro Recorder (Mantra) v28 or newer (this Mac has v\(st?["version"] as? Int ?? 0))" }
             else if (st?["lock"] as? String ?? "off") != "off" { why = "the input lock is busy (\(st?["lock"] as? String ?? "")): try again in a moment" }
             else {
                 let r = SpaceMode.macro("/lock", ["owner": SpaceMode.owner, "text": SpaceMode.banner, "seconds": 0, "pid": Int(getpid()),
@@ -129,7 +129,7 @@ final class SpaceMode: ObservableObject {
             if reason == "quit" { _ = SpaceMode.macro("/unlock", ["owner": SpaceMode.owner], timeout: 0.8) }
             else { DispatchQueue.global().async { _ = SpaceMode.macro("/unlock", ["owner": SpaceMode.owner]) } }
         }
-        note = "Space Mode off (" + reason + ")"
+        note = "Space Bar Mode off (" + reason + ")"
         if speak { Voice.say("Space mode off.") }
         Talk.shared.saveState(); App.shared.refreshStatusItem()
         NSLog("[Space] off: %@", reason)
