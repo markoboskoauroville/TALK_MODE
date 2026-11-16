@@ -69,7 +69,7 @@ enum RedEdge {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: out)
         NSColor(white: 0.5, alpha: 1).setFill(); NSRect(x: 0, y: 0, width: w, height: h).fill()
-        img.draw(in: NSRect(x: 0, y: 0, width: w, height: v.bounds.height))
+        img.draw(in: NSRect(x: 0, y: 0, width: CGFloat(w), height: v.bounds.height))
         NSGraphicsContext.restoreGraphicsState()
         try? out.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
         print("edge shot \(path)")
