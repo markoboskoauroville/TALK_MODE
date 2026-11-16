@@ -109,3 +109,11 @@ The noise guard let through sound descriptions: Marko's whistling arrived twice 
 "Since now we are working a lot with menu bar and this red record frame ... is hiding the bar. Maybe we can just keep one red." then "I was thinking we keep just the bottom line and the rest is going out."
 
 **Status:** saved first; building in v16: only a red line along the bottom edge of each screen, window = that strip, click-through.
+
+## 16.11.2026, request 20d (v16): draft in SPACE BAR MODE, "AUTO SEND WITHOUT ENTER", F-keys for the switches (from the coordinator)
+
+"Another improvement for our space bar mode, so I can in that way also add to the message. I press space, I see the message and then I add more and then when I'm ready I press enter. Of course there will be a switch to disable this behavior." + "the switch will be called Auto Send without Enter."
+
+"develop the shortcut keys for all these switches which will be from F1 and how many Fs I need ... at the top of user interface there will be a cheat sheet it will say F1 which switch, F2 which switch etc. and then I can also while I'm in the space mode I can turn switches on and off just by pressing function buttons."
+
+**Status:** saved first; building in v16 (appended draft, Enter sends, Esc clears; switch AUTO SEND WITHOUT ENTER; F1... cheat sheet).
