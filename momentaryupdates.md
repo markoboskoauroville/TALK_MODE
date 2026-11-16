@@ -91,3 +91,9 @@ The noise guard let through sound descriptions: Marko's whistling arrived twice 
 ## 15.11.2026, request 19 (v15): Space Mode exits with Esc Esc, Esc cancels a take
 
 "We need to improve the space mode. First of all, when I am in space mode, to exit the space mode I press 2 times ESC. There is no timing anymore, 2 times ESC. If I am pressing space dictating, I press once ESC, it cancels dictation. Please update this."
+
+## 16.11.2026, request 20 (v16): clear states, SPACE BAR MODE
+
+"Please improve my application talk mode. First of all it's not really clear how to use it and the messages on the screen. So for example space mode should be called the space bar mode because right now I don't know can be anything. Also the commands on the screen the big ones should be very clear with only one word. When it's red listening, it means that mic is open and you are recording to my voice. Not you are not recording, you are listening. At the moment I start to talk, you need to put recording on the screen. And when you think, that's nice thinking, and when you start to reply, put reply. And make everything right in the manifest. We want this simple and clean communication with one to two words to understand what's going on. And please update this application to be more clear and precise."
+
+**Status:** saved first; building in v16.
