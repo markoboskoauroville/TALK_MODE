@@ -103,3 +103,9 @@ The noise guard let through sound descriptions: Marko's whistling arrived twice 
 "sometimes these applications go in the background when I'm inside my, let's say, spacebar mode. Then I need to have some status line actually what's going on. Not only in UI, it needs to be always present. and for that I like it to be right on the menu bar ... similar as our voice to text application ... the same font and the same style as our voice to text and the same VU meter ... same messages so use that UI which we already developed for this application and just when we started actually display can be available already on the menu bar"
 
 **Status:** saved first; building in v16.
+
+## 16.11.2026, request 20c (v16): the red frame becomes one bottom line (from the coordinator)
+
+"Since now we are working a lot with menu bar and this red record frame ... is hiding the bar. Maybe we can just keep one red." then "I was thinking we keep just the bottom line and the rest is going out."
+
+**Status:** saved first; building in v16: only a red line along the bottom edge of each screen, window = that strip, click-through.
