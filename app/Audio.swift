@@ -76,33 +76,36 @@ enum Devices {
         uint(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultInputDevice)
     }
 
-    /// the saved choice; else the Mac's default input when it is a real microphone; else the MacBook's own microphone
-    static func pick(savedUID: String?) -> InputDevice? {
-        let all = inputs()
-        if let s = savedUID, let d = all.first(where: { $0.uid == s }) { return d }
-        let def = defaultInputID()
-        if let d = all.first(where: { $0.id == def }) { return d }
-        return all.first(where: { $0.name.lowercased().contains("macbook") }) ?? all.first
+    /// v20 (24.11.2026): Talk Mode listens to the Mac's DEFAULT input, always; the MICROPHONE line in the window sets it for the
+    /// whole Mac (kit system-audio). The old saved choice (micUID) pinned the AUHAL to one device, and AVAudioEngine dropped that
+    /// pin at the first default-device change (it rebuilt its default aggregate: BlackHole's silence came in, 24.11.2026).
+    static func systemDefault() -> SystemAudio.Device? { SystemAudio.current(input: true) }
+
+    /// why the default input cannot be listened to ("" = it can)
+    static func unusable(_ d: SystemAudio.Device?) -> String {
+        guard let d else { return "the Mac has no input device: click MICROPHONE and choose one" }
+        if d.virtual { return "the Mac's input is \(d.name), a virtual loop, not a microphone: click MICROPHONE and choose yours" }
+        if isCamera(d.name) { return "the Mac's input is \(d.name), a camera's sound: click MICROPHONE and choose your microphone" }
+        return ""
     }
 }
 
 /// The microphone, converted to 16 kHz mono Float32. A fresh AVAudioEngine for every start (a device change is a restart).
+/// v20: no device is pinned: the engine takes the Mac's default input. When macOS changes the engine's hardware (the default input
+/// or output changed, a device was plugged in or out) AVAudioEngine stops by itself and posts AVAudioEngineConfigurationChange:
+/// `onConfigChange` asks Talk to start the ears again (before v20 nobody listened for it and the ears stayed deaf or on silence).
 final class Ears {
     static let rate = 16000.0
     private var engine: AVAudioEngine?
+    private var configObserver: NSObjectProtocol?
     var onSamples: (([Float]) -> Void)?
+    var onConfigChange: (() -> Void)?
     private(set) var running = false
 
-    func start(device: InputDevice?) throws {
+    func start() throws {
         stop()
         let e = AVAudioEngine()
         let input = e.inputNode
-        if let dev = device, let au = input.audioUnit {
-            var d = dev.id
-            let st = AudioUnitSetProperty(au, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
-                                          &d, UInt32(MemoryLayout<AudioDeviceID>.size))
-            if st != noErr { NSLog("[Ears] could not select %@ (%d)", dev.name, st) }
-        }
         let fmt = input.outputFormat(forBus: 0)
         guard fmt.sampleRate > 0, fmt.channelCount > 0 else {
             throw NSError(domain: "Ears", code: 1, userInfo: [NSLocalizedDescriptionKey: "the microphone gives no sound (permission?)"])
@@ -124,6 +127,11 @@ final class Ears {
             guard err == nil, out.frameLength > 0, let p = out.floatChannelData?[0] else { return }
             self.onSamples?(Array(UnsafeBufferPointer(start: p, count: Int(out.frameLength))))
         }
+        configObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: e, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            NSLog("[Ears] the audio hardware changed (AVAudioEngineConfigurationChange)")
+            self.onConfigChange?()
+        }
         e.prepare()
         try e.start()
         engine = e
@@ -131,6 +139,7 @@ final class Ears {
     }
 
     func stop() {
+        if let o = configObserver { NotificationCenter.default.removeObserver(o); configObserver = nil }
         if let e = engine { e.inputNode.removeTap(onBus: 0); e.stop() }
         engine = nil
         running = false

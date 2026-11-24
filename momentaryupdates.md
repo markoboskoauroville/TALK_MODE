@@ -123,3 +123,9 @@ The noise guard let through sound descriptions: Marko's whistling arrived twice 
 
 16.11.2026 (Marko, 16.11.2026): "Please with all my apps on the menu bar, make a comprehensive pop-up menu. When I hover over, I want to see what is it and what is it doing." and "for my apps always make a pipes before and after so I know where one app ends and other begins."
 **Status:** saved first; building in v18 (HoverCard kit from MANTRA_MANIFEST kits/menubar-hover, pilot app; pipes in StatusBand; --hovercard-shot).
+
+## 24.11.2026 (v20): no sound in Talk Mode; input and output for the whole Mac in the window (dictated; "walks to text" = Vox to Txt, "speak" = speaker)
+
+"Please fix my system now. Nothing is working in my walks to text. When I'm in this talk mode, there is no audio coming to the talk mode. What's wrong? And in voice to text, want to have under sound ability to choose input and output, basically affecting the whole system right from that setting."
+
+"In the talk mode, the same thing. Multiply the settings everywhere. Input, output. I want to see which devices are active. In talk mode as well. In the main user interface in front, I want to see microphone and speak"

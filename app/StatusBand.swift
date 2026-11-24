@@ -12,7 +12,7 @@ import AppKit
 final class StatusBand: NSView {
     static let floorDB: Float = -54
     var word = "" { didSet { if word != oldValue { needsDisplay = true } } }
-    var wordColor: NSColor = .white { didSet { needsDisplay = true } }
+    var wordColor: NSColor = .white { didSet { if wordColor != oldValue { needsDisplay = true } } }
     var locked = false { didSet { if locked != oldValue { needsDisplay = true } } }
     var meterDB: Float? {
         didSet {
@@ -24,7 +24,10 @@ final class StatusBand: NSView {
     override var isFlipped: Bool { true }
     override func hitTest(_ p: NSPoint) -> NSView? { nil }      // the status item's button takes the click
 
-    private var font: NSFont { .monospacedSystemFont(ofSize: 9.5, weight: .semibold) }
+    // v20: one font made once, and the colour a plain sRGB NSColor (Ink.ns): the crash of 24.11.2026 (NSInvalidArgumentException
+    // "attempt to insert nil object" while CoreText copied these attributes in StatusBand.draw, the menu bar's replicant update)
+    private static let wordFont = NSFont.monospacedSystemFont(ofSize: 9.5, weight: .semibold)
+    private var font: NSFont { StatusBand.wordFont }
     var wantedWidth: CGFloat {
         let t = (word as NSString).size(withAttributes: [.font: font]).width
         return ceil(t) + 16 + (locked ? 12 : 0) + 8      // + the pipes (HoverCard kit)
@@ -45,7 +48,8 @@ final class StatusBand: NSView {
             cfg?.draw(in: NSRect(x: 11, y: (band.height - 3 - s.height) / 2 + 1, width: s.width, height: s.height))
             left = 11 + s.width + 3
         }
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: wordColor]
+        let color = wordColor.usingColorSpace(.sRGB) ?? NSColor.white
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
         let sz = (word as NSString).size(withAttributes: attrs)
         (word as NSString).draw(at: NSPoint(x: left, y: (band.height - 3 - sz.height) / 2), withAttributes: attrs)
         // the hairline meter on the bottom edge (flipped view: bottom = maxY)

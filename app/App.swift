@@ -12,7 +12,7 @@ import AppKit
 import Carbon
 import SwiftUI
 
-let VERSION = 19
+let VERSION = 20
 let APP_NAME = "Talk Mode (Mantra)"
 
 enum Ink {
@@ -29,6 +29,22 @@ enum Ink {
     static let red = hex(0xFF5A4F)
     static let violet = hex(0x9B8CFF)
     static let orange = hex(0xE8743B)
+
+    /// v20: the same colours as plain sRGB NSColors for AppKit drawing (the menu bar band): an NSColor made from a SwiftUI Color
+    /// was in the attributes when Talk Mode crashed in StatusBand.draw (24.11.2026, NSInvalidArgumentException, nil in the copy)
+    static func nsHex(_ v: UInt32) -> NSColor {
+        NSColor(srgbRed: CGFloat((v >> 16) & 255) / 255, green: CGFloat((v >> 8) & 255) / 255, blue: CGFloat(v & 255) / 255, alpha: 1)
+    }
+    static func ns(_ s: TalkState) -> NSColor {
+        switch s {
+        case .listening: return nsHex(0x33D17A)
+        case .hearing, .manual: return nsHex(0xFF5A4F)
+        case .writing, .thinking, .sending: return nsHex(0x9B8CFF)
+        case .speaking: return nsHex(0xE8743B)
+        case .typing, .recording: return nsHex(0x7A8087)
+        case .voiceDown, .noMic, .noTarget: return nsHex(0xF0A030)
+        }
+    }
 
     static func of(_ s: TalkState) -> Color {
         switch s {
@@ -373,6 +389,10 @@ struct Root: View {
                 .padding(.horizontal, 10).padding(.vertical, 5).frame(maxWidth: .infinity)
                 .accessibilityIdentifier("cheat-sheet")
             Hairline()
+            // v20 (Marko, 24.11.2026: "In the main user interface in front, I want to see microphone and speak[er]"): the Mac's
+            // default input with its live level and the default output; a click opens the picker, which sets them for the whole Mac
+            SystemAudioLines(size: 15).padding(.horizontal, 18).padding(.vertical, 8)
+            Hairline()
             GeometryReader { g in
                 let big = max(20, min(g.size.width / 7.5, g.size.height / 3.4, 170))
                 VStack(spacing: big * 0.22) {
@@ -618,20 +638,21 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
         var lines = ["Mode: " + (t.auto ? "AUTO" : "manual") + (t.autoSendNoEnter ? " · send without Enter" : ""),
                      "Space Bar Mode: " + (SpaceMode.shared.on ? "ON, keyboard and mouse off" : "off"),
                      "Draft: " + (t.draft.isEmpty ? "empty" : "\(t.draft.count) characters")]
-        if let d = t.device { lines.append("Microphone: " + d.name) }
+        let live = SystemAudioLive.shared
+        lines.append("Microphone: " + (live.input?.name ?? "none") + (live.inputWarning.isEmpty ? "" : " · " + live.inputWarning))
+        lines.append("Speaker: " + (live.output?.name ?? "none"))
         return HoverCard.Content(name: "Talk Mode (Mantra)", what: "Talk to a Claude session by voice",
-                                 state: t.on ? t.state.word : "OFF", stateColor: NSColor(Ink.of(t.state)), lines: lines)
+                                 state: t.on ? t.state.word : "OFF", stateColor: Ink.ns(t.state), lines: lines)
     }
 
     /// the one-word state with the live VU meter, the same words and colours as the window; a padlock while Space Bar Mode holds the lock
     func refreshStatusItem() {
         let t = Talk.shared
-        let c = Ink.of(t.state)
         var shownWord = t.state.word
         if !t.flash.isEmpty { shownWord = t.flash }
         else if !t.draft.isEmpty { shownWord += " ✎ " + (t.draft.count > 22 ? "…" + t.draft.suffix(22) : t.draft) }
         band.word = shownWord
-        band.wordColor = NSColor(c)
+        band.wordColor = Ink.ns(t.state)
         band.locked = SpaceMode.shared.on
         band.meterDB = (t.on && t.state != .typing) ? t.levelDB : nil
         guard let s = status, let button = s.button else { return }
@@ -672,12 +693,12 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
             fi.submenu = fm; sm.addItem(fi)
         }
         ses.submenu = sm; m.addItem(ses)
-        let mic = NSMenuItem(title: "Microphone", action: nil, keyEquivalent: ""), mm = NSMenu()
-        for d in t.devices {
-            let i = NSMenuItem(title: d.name, action: #selector(menuMic(_:)), keyEquivalent: "")
-            i.target = self; i.representedObject = d.uid; i.state = d.uid == t.device?.uid ? .on : .off; mm.addItem(i)
-        }
-        mic.submenu = mm; m.addItem(mic)
+        // v20: the kit's pickers: they set the Mac's default input and output (Talk Mode follows the default input)
+        let live = SystemAudioLive.shared
+        let mic = NSMenuItem(title: "Microphone · " + (live.input?.name ?? "none"), action: nil, keyEquivalent: "")
+        mic.submenu = SystemAudio.menu(input: true); m.addItem(mic)
+        let spk = NSMenuItem(title: "Speaker · " + (live.output?.name ?? "none"), action: nil, keyEquivalent: "")
+        spk.submenu = SystemAudio.menu(input: false); m.addItem(spk)
         // v11: what left the window lives here: the pause and the noise limit (the language is Voice to Text's own pill)
         let pz = NSMenuItem(title: String(format: "Pause That Ends a Sentence · %.1f s", t.pause), action: nil, keyEquivalent: ""), pm = NSMenu()
         for v in [0.8, 1.0, 1.3, 1.6, 2.0, 2.5, 3.0] {
@@ -707,9 +728,6 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelega
     @objc func menuShow() { showWindow() }
     @objc func menuSession(_ i: NSMenuItem) {
         if let id = i.representedObject as? String, let s = Talk.shared.folders.flatMap(\.sessions).first(where: { $0.id == id }) { Talk.shared.choose(s) }
-    }
-    @objc func menuMic(_ i: NSMenuItem) {
-        if let uid = i.representedObject as? String, let d = Talk.shared.devices.first(where: { $0.uid == uid }) { Talk.shared.choose(d) }
     }
     @objc func menuSpaceMode() { SpaceMode.shared.toggle() }
     @objc func menuPause(_ i: NSMenuItem) { if let v = i.representedObject as? Double { Talk.shared.pause = v } }
@@ -828,8 +846,11 @@ enum Main {
             print(ok ? "delivered to \(t.device) › \(t.name)" : "NOT delivered: \(why)"); exit(ok ? 0 : 1)
         }
         if args.contains("--list-mics") {
-            let pick = Devices.pick(savedUID: UserDefaults.standard.string(forKey: "micUID"))
-            for d in Devices.inputs() { print("\(d.uid == pick?.uid ? "*" : " ") \(d.name)\t\(d.uid)") }
+            // v20: Talk Mode listens to the Mac's default input (*); a virtual one or a camera is refused (the reason is printed)
+            let cur = SystemAudio.defaultID(input: true)
+            for d in SystemAudio.list(input: true) { print("\(d.id == cur ? "*" : " ") \(d.name)\t\(d.uid)\(d.virtual ? "\tvirtual" : "")") }
+            let why = Devices.unusable(Devices.systemDefault())
+            print(why.isEmpty ? "listens to the default input" : "refused: " + why)
             exit(0)
         }
         if let i = args.firstIndex(of: "--edge-shot"), i + 1 < args.count {

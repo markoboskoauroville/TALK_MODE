@@ -40,7 +40,7 @@ enum TalkState: Equatable {
         case .speaking: return "Claude is speaking"
         case .recording: return "Voice to Text is recording; I wait"
         case .voiceDown: return "the voice engine does not answer"
-        case .noMic: return "no microphone to listen with"
+        case .noMic(let why): return why.isEmpty ? "no microphone to listen with" : why
         case .noTarget: return "choose a session in step 1"
         }
     }
@@ -56,7 +56,7 @@ enum TalkState: Equatable {
         case .speaking: return "Claude is speaking the answer; I do not listen until it is finished."
         case .recording: return "Voice to Text (Vox) is recording; I do not listen until it stops, then I listen again."
         case .voiceDown: return "The voice engine (MANTRA_VOICE) does not answer; I am trying to start it."
-        case .noMic: return "I have no microphone to listen with."
+        case .noMic(let why): return "I have no microphone to listen with" + (why.isEmpty ? "." : ": " + why + ".")
         case .noTarget: return "No Claude Code session is chosen; pick one in step 1."
         case .manual: return "You are recording with Talk Mode; press Space or STOP AND SEND to send it."
         case .sending: return "I am sending your recording to the session."
@@ -91,8 +91,8 @@ final class Talk: ObservableObject {
     @Published private(set) var target: Target?
     @Published private(set) var heardVia = ""
     @Published private(set) var scanning = false
-    @Published private(set) var devices: [InputDevice] = []
-    @Published private(set) var device: InputDevice?
+    /// v20: the Mac's default input (kit system-audio): Talk Mode follows it, the MICROPHONE line in the window sets it
+    @Published private(set) var device: SystemAudio.Device?
     /// v11: the language is Voice to Text's (its pill: EN, HR or AUTO), read from its /status; no selector here any more
     @Published private(set) var lang: String = "en"
     /// v16 (Marko, 16.11.2026: "I press space, I see the message and then I add more and then when I'm ready I press enter ... the switch
@@ -186,22 +186,61 @@ final class Talk: ObservableObject {
         vad.onNoise = { [weak self] _ in DispatchQueue.main.async { self?.voiceEnded() } }
         vad.onUtterance = { [weak self] s, span in self?.utterance(s, span) }
         ears.onSamples = { [weak self] s in self?.work.async { self?.samples(s) } }
+        ears.onConfigChange = { [weak self] in self?.restartEars("the audio hardware changed") }
+        // v20: a change of the default input or output, made anywhere (this window, Vox, System Settings, a plug): the ears start again
+        SystemAudioLive.shared.onChange { [weak self] inputChanged in self?.restartEars(inputChanged ? "the default input changed" : "the default output changed") }
         Gate.shared.startPolling()
-        refreshDevices()
-        startEars()
+        startEars("start")
         refreshSessions()
         tick = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in self?.update() }
+        Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.saveState() }      // v20: the live level in state.json
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in self?.refreshSessions() }
         saveState()
     }
 
-    private func startEars() {
-        do { try ears.start(device: device); note = "" }
-        catch { state = .noMic(error.localizedDescription); note = "Microphone: \(error.localizedDescription)" }
+    /// v20: the ears start again a moment after a hardware change (several notifications come together), at most once a second
+    private var restartWork: DispatchWorkItem?
+    private var lastStart = Date.distantPast
+    func restartEars(_ why: String) {
+        restartWork?.cancel()
+        let wait = max(0.4, 1.0 - Date().timeIntervalSince(lastStart))
+        let w = DispatchWorkItem { [weak self] in self?.startEars(why) }
+        restartWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: w)
+    }
+
+    private func startEars(_ why: String) {
+        lastStart = Date()
+        device = Devices.systemDefault()
+        let bad = Devices.unusable(device)
+        work.async { self.vad.reset() }
+        if !bad.isEmpty {
+            ears.stop(); SystemAudioLive.shared.inactive()
+            state = .noMic(bad); note = bad
+            NSLog("[Talk] ears off (%@): %@", why, bad)
+            saveState(); return
+        }
+        do {
+            try ears.start()
+            note = ""
+            if case .noMic = state { state = on ? .listening : .typing }
+            NSLog("[Talk] ears on %@ (%@)", device?.name ?? "?", why)
+        } catch {
+            SystemAudioLive.shared.inactive()
+            state = .noMic(error.localizedDescription); note = "Microphone: \(error.localizedDescription)"
+            NSLog("[Talk] ears failed (%@): %@", why, error.localizedDescription)
+        }
+        saveState()
     }
 
     // ------------------------------------------------------------ audio (work queue)
     private func samples(_ s: [Float]) {
+        // v20: every chunk that arrives is counted and its level shown beside MICROPHONE (also while the gate is closed): the
+        // proof that sound really arrives; pure zeros (a loop, a dead device) read -140 dB and turn into "no sound arriving"
+        var sq: Float = 0
+        for x in s { sq += x * x }
+        let chunkDB = 20 * log10(max(sqrt(sq / Float(max(1, s.count))), 1e-7))
+        SystemAudioLive.shared.feed(db: chunkDB, frames: s.count)
         if manualOn {                                  // Space pressed: everything goes into the take, no detector
             if Gate.shared.closed { return }
             manualBuf.append(contentsOf: s)
@@ -487,8 +526,6 @@ final class Talk: ObservableObject {
         folders = [DeviceFolder(name: "MacBook Pro", online: true, note: "", sessions: mac)]
         target = mac.first
         heardVia = "Deepgram EN · Frankfurt · 1.1 s"
-        devices = [InputDevice(id: 0, uid: "preview", name: "External Microphone")]
-        device = devices.first
         levelDB = -30
     }
     func repeatLast() { Voice.replay() }
@@ -524,19 +561,6 @@ final class Talk: ObservableObject {
         saveState()
     }
 
-    func refreshDevices() {
-        devices = Devices.inputs()
-        device = Devices.pick(savedUID: UserDefaults.standard.string(forKey: "micUID"))
-    }
-
-    func choose(_ d: InputDevice) {
-        device = d
-        UserDefaults.standard.set(d.uid, forKey: "micUID")
-        work.async { self.vad.reset() }
-        startEars()
-        if case .noMic = state { state = on ? .listening : .typing }
-        saveState()
-    }
 
     // ------------------------------------------------------------ state for the sessions (talkmode status)
     static let stateFile: URL = {
@@ -567,7 +591,8 @@ final class Talk: ObservableObject {
 
     func saveState() {
         let j: [String: Any] = ["on": on, "state": state.word, "plain": state.plain, "target": target?.name ?? "", "target_device": target?.device ?? "", "target_id": target?.id ?? "", "heard_via": heardVia,
-                                "mic": device?.name ?? "", "lang": lang, "space_mode": SpaceMode.shared.on, "draft": draft, "auto_send_no_enter": autoSendNoEnter, "last_take": lastTake, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
+                                "mic": device?.name ?? "", "speaker": SystemAudioLive.shared.output?.name ?? "", "mic_problem": Devices.unusable(device),
+                                "samples_in": SystemAudioLive.shared.samples, "level_db": Double(SystemAudioLive.shared.levelDB), "no_sound": SystemAudioLive.shared.noSound, "lang": lang, "space_mode": SpaceMode.shared.on, "draft": draft, "auto_send_no_enter": autoSendNoEnter, "last_take": lastTake, "mode": auto ? "AUTO" : "MANUAL", "heard": heard, "pid": getpid(),
                                 "time": ISO8601DateFormatter().string(from: Date())]
         if let d = try? JSONSerialization.data(withJSONObject: j, options: [.prettyPrinted]) { try? d.write(to: Talk.stateFile, options: .atomic) }
     }
