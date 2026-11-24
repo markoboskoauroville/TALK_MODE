@@ -40,3 +40,9 @@
 
 ## Lesson: hover card and pipes (16.11.2026)
 Poll the mouse (macOS draws a status item once per display, only one copy owns the button, so a tracking area misses the other display). The panel needs `titleVisibility = .hidden` for the one-title guard. A non-activating NSPanel at statusBar+1 never takes focus. Pipes for text items: attributed title; for icon items: pipedIcon + rightPipe; for view items: drawPipes or PipesView.
+
+## v20 (24.11.2026): no sound in Talk Mode
+- AVAudioEngine on macOS builds its input from a default-device aggregate. Pinning the input unit to a device with kAudioOutputUnitProperty_CurrentDevice lasts only until the next default-device change: the engine rebuilds the aggregate from the defaults and the pin is gone (it went to BlackHole's silence). Listen for AVAudioEngineConfigurationChange and start again, and prefer the system default.
+- The archive told the truth: -91 dB in every take = digital zeros, so the problem was the device, not the engine or the network. ffmpeg volumedetect on the .m4a takes settled it in a second.
+- A crash leaves no .ips when ReportCrash is quiet: `/usr/bin/log show --predicate 'process == "TalkMode"'` has the "Terminating app" reason and the stack (the shell's `log` was a function: use /usr/bin/log).
+- Never put an NSColor made from a SwiftUI Color into AppKit string attributes drawn by the status item's replicant update: plain sRGB NSColor and a font made once.
